@@ -7,11 +7,13 @@ import { dvoteDetails } from "utils/mockData";
 import SplitButton from "ui-component/buttons/SplitButton";
 import { useEffect } from "react";
 import { IoMdPrint } from 'react-icons/io';
+import { usePrinter } from 'providers/PrinterProvider';
 
 
 const ReceiptModal = ({ open, disableCloseAfterPrinting, reprint, onClose, onPrint, receipt, transaction, forceShow }) => {
 
     const { toPDF, targetRef } = usePDF({ filename: `invoice-${transaction?.invoiceNumber}.pdf`, page: { format: 'letter' } });
+    const printing = usePrinter()?.printing
 
     useEffect(() => {
         if (open) {
@@ -81,8 +83,8 @@ const ReceiptModal = ({ open, disableCloseAfterPrinting, reprint, onClose, onPri
                     <Button startIcon={<DownloadIcon />} variant="contained" color="primary" onClick={() => toPDF({ resolution: 0.5 })}>
                         Download
                     </Button>
-                    <Button startIcon={<IoMdPrint />} variant="contained" color="primary" onClick={handlePrint2}>
-                        Print
+                    <Button startIcon={<IoMdPrint />} variant="contained" color="primary" onClick={handlePrint2} disabled={printing}>
+                        {printing ? 'Printing...' : 'Print'}
                     </Button>
                     {/* <SplitButton 
                         onClick={handlePrint} 

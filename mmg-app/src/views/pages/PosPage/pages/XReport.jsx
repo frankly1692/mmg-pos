@@ -28,7 +28,7 @@ function XReportPage() {
     })
     const report = data?.reports?.[0]
 
-    const { print } = usePrinter()
+    const { print, printing } = usePrinter()
 
     // const { mutateAsync: printReport } = useMutation(print.PrintReport)
     const { mutateAsync: generateZReport, isLoading } = useMutation(branch_reports.GenerateBranchReport)
@@ -72,8 +72,8 @@ function XReportPage() {
                         <Typography variant="h4" gutterBottom>
                             X-Reading Report
                         </Typography>
-                        <Button onClick={onPrint} startIcon={<IoMdPrint />} sx={{ bgcolor: 'grey.50' }} color="primary">
-                            Print
+                        <Button onClick={onPrint} disabled={printing} startIcon={<IoMdPrint />} sx={{ bgcolor: 'grey.50' }} color="primary">
+                            {printing ? 'Printing...' : 'Print'}
                         </Button>
                     </Stack>
 

@@ -10,7 +10,7 @@ import moment from 'moment';
 
 export default ({ open, report, onClose, disableActions }) => {
     const navigate = useNavigate();
-    const { print } = usePrinter();
+    const { print, printing } = usePrinter();
     const { toPDF, targetRef } = usePDF({filename: 'x-report.pdf'});
 
     if (!open) return null;
@@ -36,8 +36,9 @@ export default ({ open, report, onClose, disableActions }) => {
                     sx={{ bgcolor: 'grey.50', mr: 1 }}
                     color="primary"
                     onClick={handlePrint}
+                    disabled={printing}
                 >
-                    Print
+                    {printing ? 'Printing...' : 'Print'}
                 </Button>
                 <Button
                     startIcon={<DownloadIcon />}

@@ -82,7 +82,10 @@ const WithPrintMutation = ({ children }) => {
             const printCount = trialMode ? 1 : 3
 
             for (let i = 0; i < printCount; i++) {
-                await print("printer", "receipt", data)
+                const result = await print("printer", "receipt", data)
+                // Another print is running, or the printer is unavailable: the remaining copies
+                // would only fail the same way (and each waits out the helper's connection retry).
+                if (result?.busy || result?.error) break
             }
         } catch (e) {
             throw e

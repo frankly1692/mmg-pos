@@ -41,6 +41,8 @@ Source: "..\config.json.example"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 ; Common startup: the helper starts for every user that logs in.
 Name: "{commonstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Flags: runminimized
+; Start menu entry so anyone can relaunch the helper by hand (a second launch replaces the running copy).
+Name: "{commonprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"
 
 [Run]
 Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Description: "Start {#AppName} now"; Flags: nowait postinstall skipifsilent runminimized

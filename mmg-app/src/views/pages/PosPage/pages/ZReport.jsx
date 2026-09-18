@@ -27,7 +27,7 @@ function ZReportPage() {
         enabled: !!branch
     })
     const report = data?.[0]
-    const { print } = usePrinter()
+    const { print, printing } = usePrinter()
 
     function onPrint() {
         print("printer", "report", { ...report, dvoteDetails, type: 'Z_REPORT' })
@@ -68,8 +68,8 @@ function ZReportPage() {
                         <Typography variant="h4" gutterBottom>
                             Z-Reading Report
                         </Typography>
-                        <Button onClick={onPrint} startIcon={<IoMdPrint />} sx={{ bgcolor: 'grey.50' }} color="primary">
-                            Print
+                        <Button onClick={onPrint} disabled={printing} startIcon={<IoMdPrint />} sx={{ bgcolor: 'grey.50' }} color="primary">
+                            {printing ? 'Printing...' : 'Print'}
                         </Button>
                     </Stack>
 

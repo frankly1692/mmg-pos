@@ -58,7 +58,7 @@ Bad or missing values never stop the helper starting: it falls back to defaults 
 |---|---|
 | Green | Server running, printer reachable, BIR credentials set |
 | Yellow | Printer unreachable (receipts journal only), or BIR credentials not set |
-| Red | Server not running (port in use, crash) |
+| Red | Server failed or not running (port in use, crash). It retries by itself after 2, 5, 10, then every 30 seconds, and turns green when the fault clears |
 
 Menu: Test Print · Settings and Logs... · Open Journal Folder · Restart · Quit.
 
@@ -105,6 +105,10 @@ All messages are JSON. Send to `ws://localhost:9999`, receive a JSON response.
 
 A failed request does not close the connection.
 
+Any request may include a `request_id`; the reply echoes it, so the browser can match each reply to its request. Printer jobs (`receipt`, `report`, `test`, `ejournal`) run one at a time across all connections, so output from two tabs or a double click cannot interleave.
+
+`PrinterProvider.jsx` uses this to make printing blocking: `print()` returns a promise that resolves with the helper's reply, `printing` is true while a printer job is in flight, and a second printer job is refused (`{ busy: true }`) until the first finishes. Print buttons disable while `printing` is true.
+
 ## Development
 
 See [SETUP.md](SETUP.md) for the full guide.
@@ -132,7 +136,7 @@ cd pos-helper-app
 # Output: installer\Output\MMG-Helper-Setup.exe
 ```
 
-Copy `MMG-Helper-Setup.exe` to each cashier PC and run it (administrator, one prompt). It installs for all users to `C:\MMG-POS`, asks for the workstation settings, starts the helper at every login, and appears in Add/Remove Programs.
+Copy `MMG-Helper-Setup.exe` to each cashier PC and run it (administrator, one prompt). It installs for all users to `C:\MMG-POS`, asks for the workstation settings, starts the helper at every login, adds a Start menu entry to relaunch it by hand, and appears in Add/Remove Programs.
 
 Silent / scripted install:
 
@@ -159,3 +163,4 @@ Precedence per field: command-line switch > `branch-defaults.ini` > BIR values f
 - **Receipt printer:** Epson TM-series ESC/POS over TCP/IP. The tray status probes port 9100.
 - **VFD customer display:** RS-232 serial, `display_port` in `config.json` (default `COM3`; `/dev/ttyACM1` on Linux). `\x0C` (form feed) clears the 2×20 display.
 - Printer failure is non-fatal: the receipt is still journaled and the response says the printer was unavailable.
+- The helper tries the printer connection twice (2 s timeout each) before giving up, to ride out a network blip. This happens only before anything is sent; once connected, a failed print is never retried, so a receipt cannot print twice.

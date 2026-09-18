@@ -48,8 +48,9 @@ def make_icon(color) -> Image.Image:
 def compute_status(app, server):
     """Return (colour, one-line text). Cheap enough to call from a poll thread."""
     cfg = app.CONFIG
-    if server.state == "error":
-        return RED, f"Server error: {server.error}"
+    if server.state == "retrying":
+        # No countdown in the text: it would change every poll and flood the log with [STATUS] lines.
+        return RED, f"Server failed, retrying (attempt {server.attempt}): {server.error}"
     if server.state != "running":
         return RED, "Server not running"
     unset = helper_config.unset_credentials(cfg)

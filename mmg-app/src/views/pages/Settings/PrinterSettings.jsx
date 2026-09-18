@@ -11,7 +11,7 @@ const PrinterSettings = () => {
     const [statusMessage, setStatusMessage] = useState('');
     const [statusType, setStatusType] = useState('');
     const [trialMode, setTrialMode] = useState(false);
-    const { print, status } = usePrinter()
+    const { print, status, printing } = usePrinter()
 
     useEffect(() => {
         const savedPrinterIP = localStorage.getItem('printerIP') || '192.168.192.168';
@@ -27,11 +27,17 @@ const PrinterSettings = () => {
         }
     }, []);
 
-    const handlePrintTest = () => {
-        print('printer', 'test', { settings: { url: printerIP || '192.168.192.168' }, message: testMessage })
-        setStatusMessage('Test print sent to printer...');
+    const showResult = (result, fallback) => {
+        if (result?.busy) return
+        setStatusMessage(result?.error ? `${result.message || 'Print failed'}: ${result.error}` : (result?.message || fallback));
+        setStatusType(result?.error ? 'error' : 'success');
+        setTimeout(() => setStatusMessage(''), 6000);
+    };
+
+    const handlePrintTest = async () => {
+        setStatusMessage('Printing...');
         setStatusType('info');
-        setTimeout(() => setStatusMessage(''), 4000);
+        showResult(await print('printer', 'test', { settings: { url: printerIP || '192.168.192.168' }, message: testMessage }), 'Test print done');
     };
 
     const handlePrinterIPChange = (e) => {
@@ -52,11 +58,10 @@ const PrinterSettings = () => {
         localStorage.setItem('printerTrialMode', JSON.stringify(enabled));
     };
 
-    const handlePrintEjournal = () => {
-        print('printer', 'ejournal', {})
-        setStatusMessage('Electronic journal sent to printer...');
+    const handlePrintEjournal = async () => {
+        setStatusMessage('Printing electronic journal...');
         setStatusType('info');
-        setTimeout(() => setStatusMessage(''), 4000);
+        showResult(await print('printer', 'ejournal', {}), 'Electronic journal printed');
     };
 
     return (
@@ -122,6 +127,7 @@ const PrinterSettings = () => {
                         variant="contained"
                         color="primary"
                         onClick={handlePrintTest}
+                        disabled={printing}
                         startIcon={<PrintIcon />}
                     >
                         Send Test Print
@@ -165,6 +171,7 @@ const PrinterSettings = () => {
                         variant="outlined"
                         color="primary"
                         onClick={handlePrintEjournal}
+                        disabled={printing}
                     >
                         Print Electronic Journal
                     </Button>

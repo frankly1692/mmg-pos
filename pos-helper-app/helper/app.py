@@ -67,22 +67,36 @@ def get_local_time():
 def clip(value):
     return "{:.2f}".format(value)
 
+PRINTER_CONNECT_ATTEMPTS = 2
+PRINTER_CONNECT_TIMEOUT = 2    # seconds per connection attempt
+PRINTER_CONNECT_PAUSE = 0.5    # seconds between attempts
+PRINTER_WRITE_TIMEOUT = 10     # seconds a print may take once connected
+
 def get_printer_device(setting: dict = {}):
-    p = None
+    """Connect to the receipt printer, retrying a few times to ride out a network blip.
+
+    Retrying is only safe because nothing has been sent yet: python-escpos connects lazily, so we
+    open the socket here and either hand back a live printer or an error. Once connected, a failure
+    during printing is never retried (see ReceiptWriter._printer_failed), so a receipt can't print twice.
+    """
+    # Handle case where setting is not a dict (e.g., string "network")
+    if not isinstance(setting, dict):
+        setting = {}
+    url = setting.get('url') or CONFIG['printer_ip']
     error = None
-    try:
-        # Handle case where setting is not a dict (e.g., string "network")
-        if not isinstance(setting, dict):
-            setting = {}
-        url = setting.get('url') or CONFIG['printer_ip']
-        print(f"Attempting printer connection to: {url}")
-        p = Network(url)
-        if p is None:
-            raise Exception("Printer network object is None")
-    except Exception as e:
-        print(f"Printer connection error: {e}")
-        error = str(e)
-    return p, error
+    for attempt in range(1, PRINTER_CONNECT_ATTEMPTS + 1):
+        print(f"Attempting printer connection to: {url} ({attempt}/{PRINTER_CONNECT_ATTEMPTS})")
+        p = Network(url, timeout=PRINTER_CONNECT_TIMEOUT)
+        try:
+            p.open()
+            p.device.settimeout(PRINTER_WRITE_TIMEOUT)
+            return p, None
+        except Exception as e:
+            error = str(e).strip() or f"{type(e).__name__} connecting to {url}"
+            print(f"Printer connection error: {error}")
+            if attempt < PRINTER_CONNECT_ATTEMPTS:
+                time.sleep(PRINTER_CONNECT_PAUSE)
+    return None, error
 
 def get_display_device():
     return serial.Serial(port=CONFIG['display_port'], baudrate=CONFIG['display_baudrate'])
@@ -118,9 +132,9 @@ class ReceiptWriter:
                 self._printer_failed("close", e)
 
     def _printer_failed(self, op: str, e: Exception):
-        """python-escpos connects lazily, so an offline printer only fails on first use.
-        Record it in self.error (callers report 'printer unavailable' from that) and stop
-        touching the printer: each further call would otherwise wait out its own timeout."""
+        """A print failed after the connection was made. Record it in self.error (callers report
+        'printer unavailable' from that) and stop touching the printer. Deliberately NOT retried:
+        some of the receipt may already have printed, and retrying could print it twice."""
         print(f"[{get_local_time()}] [ERR] Printer {op} error: {e}")
         if not self.error:
             self.error = str(e).strip() or f"{type(e).__name__} during {op}"
@@ -652,6 +666,17 @@ def display_next():
 
 
 _req_ids = itertools.count(1)
+_print_lock = None   # created on first use so it belongs to the server's event loop
+
+
+async def _run_print_job(fn, data):
+    """Printer jobs run strictly one at a time. Two tabs (or a double click) can't interleave
+    their output on the paper or open two connections to the printer at once."""
+    global _print_lock
+    if _print_lock is None:
+        _print_lock = asyncio.Lock()
+    async with _print_lock:
+        return await asyncio.to_thread(fn, data)
 
 
 def _preview(message, limit=4000):
@@ -669,6 +694,7 @@ async def handler(websocket):
         async for message in websocket:
             req_id = next(_req_ids)
             started = time.monotonic()
+            data = None   # this request's payload; never a leftover from the previous message
             try:
                 data = json.loads(message)
                 device = data.get("device")
@@ -680,13 +706,13 @@ async def handler(websocket):
                 if device == "terminal" and dtype == "info":
                     ret = {"MIN": TERMINAL_MIN, "SN": TERMINAL_SN, "PTU_NO": TERMINAL_PTU_NO}
                 if device == "printer" and dtype == "test":
-                    ret = await asyncio.to_thread(print_test, data)
+                    ret = await _run_print_job(print_test, data)
                 if device == "printer" and dtype == "receipt":
-                    ret = await asyncio.to_thread(print_receipt, data)
+                    ret = await _run_print_job(print_receipt, data)
                 if device == "printer" and dtype == "report":
-                    ret = await asyncio.to_thread(print_report, data)
+                    ret = await _run_print_job(print_report, data)
                 if device == "printer" and dtype == "ejournal":
-                    ret = await asyncio.to_thread(print_ejournal, data)
+                    ret = await _run_print_job(print_ejournal, data)
                 if device == "display" and dtype == "message":
                     ret = await asyncio.to_thread(display_message, data)
                 if device == "display" and dtype == "item":
@@ -703,6 +729,8 @@ async def handler(websocket):
                 status = "OK" if "error" not in ret else "FAILED"
                 print(f"[{get_local_time()}] [RES #{req_id}] {device}/{dtype} {status} {elapsed_ms}ms response={_preview(json.dumps(ret), 1000)}")
 
+                if data.get("request_id") is not None:
+                    ret["request_id"] = data["request_id"]
                 await websocket.send(json.dumps(ret))
             except json.JSONDecodeError as e:
                 print(f"[{get_local_time()}] [ERR #{req_id}] JSON parse error: {e} | raw={_preview(message, 500)}")
@@ -711,14 +739,17 @@ async def handler(websocket):
                 except:
                     pass
             except Exception as e:
-                device = data.get("device", "unknown") if 'data' in locals() else "unknown"
-                dtype = data.get("device_type", "unknown") if 'data' in locals() else "unknown"
+                device = data.get("device", "unknown") if isinstance(data, dict) else "unknown"
+                dtype = data.get("device_type", "unknown") if isinstance(data, dict) else "unknown"
                 error_detail = f"{type(e).__name__}: {e}"
                 elapsed_ms = int((time.monotonic() - started) * 1000)
                 print(f"[{get_local_time()}] [ERR #{req_id}] {device}/{dtype} raised after {elapsed_ms}ms - {error_detail} | payload={_preview(message)}")
                 print(traceback.format_exc())
                 try:
-                    await websocket.send(json.dumps({'error': error_detail}))
+                    reply = {'error': error_detail}
+                    if isinstance(data, dict) and data.get("request_id") is not None:
+                        reply["request_id"] = data["request_id"]
+                    await websocket.send(json.dumps(reply))
                 except:
                     pass
     except Exception as e:
@@ -769,46 +800,79 @@ def kill_existing_process(port=9999):
     except Exception as e:
         print(f"[{get_local_time()}] [WARN] Could not kill existing process: {e}")
 
+BACKOFF_SECONDS = (2, 5, 10, 30)   # retry delays; the last one repeats until it works
+
+
 class HelperServer:
-    """The WebSocket server, runnable on a background thread so the tray can own the main thread."""
+    """The WebSocket server, runnable on a background thread so the tray can own the main thread.
+
+    If the server fails to start or dies (typically the port is busy at login), it retries with
+    backoff until it works or stop() is called, and recovers on its own when the fault clears."""
 
     def __init__(self):
         self.thread = None
         self.loop = None
         self._stop = None
-        self.state = "stopped"   # stopped | starting | running | error
+        self._halt = threading.Event()   # set by stop(): give up, do not retry
+        self._ran = False                # reached "running" during the current attempt
+        self.state = "stopped"           # stopped | starting | running | retrying
         self.error = None
+        self.attempt = 0                 # failed attempts since the last time it was healthy
         self.port = None
 
     def start(self):
         if self.thread and self.thread.is_alive():
             return
-        self.state, self.error = "starting", None
+        self._halt.clear()
+        self.state, self.error, self.attempt = "starting", None, 0
         self.thread = threading.Thread(target=self._run, name="ws-server", daemon=True)
         self.thread.start()
 
     def _run(self):
-        try:
-            asyncio.run(self._serve())
-        except Exception as e:
-            self.state, self.error = "error", f"{type(e).__name__}: {e}"
-            print(f"[{get_local_time()}] [ERR] WebSocket server failed: {self.error}")
-            print(traceback.format_exc())
+        while not self._halt.is_set():
+            self._ran = False
+            try:
+                asyncio.run(self._serve())
+                if self._halt.is_set():
+                    break
+                raise RuntimeError("server exited unexpectedly")
+            except Exception as e:
+                self.error = f"{type(e).__name__}: {e}"
+                print(f"[{get_local_time()}] [ERR] WebSocket server failed: {self.error}")
+                if self.attempt == 0 or self._ran:   # full traceback once per outage, not every retry
+                    print(traceback.format_exc())
+            if self._ran:
+                self.attempt = 0         # it was healthy for a while: start the backoff over
+            delay = BACKOFF_SECONDS[min(self.attempt, len(BACKOFF_SECONDS) - 1)]
+            self.attempt += 1
+            self.state = "retrying"
+            print(f"[{get_local_time()}] [WARN] Retrying WebSocket server in {delay}s (attempt {self.attempt})")
+            if self._halt.wait(delay):
+                break
+        self.state = "stopped"
 
     async def _serve(self):
         self.loop = asyncio.get_running_loop()
         self._stop = asyncio.Event()
-        port = CONFIG["ws_port"]
-        kill_existing_process(port)
-        async with serve(handler, "127.0.0.1", port):
-            self.port, self.state = port, "running"
-            print(f"[{get_local_time()}] [OK] WebSocket server listening on ws://127.0.0.1:{port}")
-            await self._stop.wait()
-        self.state = "stopped"
+        try:
+            port = CONFIG["ws_port"]
+            kill_existing_process(port)
+            async with serve(handler, "127.0.0.1", port):
+                self.port, self.state, self.error, self._ran = port, "running", None, True
+                print(f"[{get_local_time()}] [OK] WebSocket server listening on ws://127.0.0.1:{port}")
+                await self._stop.wait()
+        finally:
+            self.loop = self._stop = None   # never leave a closed loop for stop() to poke
 
     def stop(self, timeout=5):
-        if self.loop and self._stop and self.thread and self.thread.is_alive():
-            self.loop.call_soon_threadsafe(self._stop.set)
+        self._halt.set()                     # also wakes a pending retry wait
+        loop, stop_event = self.loop, self._stop
+        if loop and stop_event:
+            try:
+                loop.call_soon_threadsafe(stop_event.set)
+            except RuntimeError:
+                pass                         # loop already closed
+        if self.thread and self.thread.is_alive():
             self.thread.join(timeout)
 
     def restart(self):
