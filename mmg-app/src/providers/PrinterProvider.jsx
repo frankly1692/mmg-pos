@@ -8,21 +8,23 @@ const PrinterProvider = ({ children }) => {
     const [printing, setPrinting] = useState(false)
     const [status, setStatus] = useState(statuses[3])
 
+    console.log(status)
+
     useEffect(() => {
         const ws = connect()
-         if (ws && ws.readyState === WebSocket.OPEN) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
             display('message')
         }
 
         return () => {
             if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.close();
+                ws.close();
             }
         };
     }, [])
 
     function connect() {
-        const ws = new WebSocket('ws://localhost:9999');
+        const ws = new WebSocket('ws://localhost:9876');
 
         ws.onopen = () => {
             setSocket(ws)
@@ -43,7 +45,7 @@ const PrinterProvider = ({ children }) => {
         return ws
     }
 
-    function print(device, deviceType, data) {
+    function print(device, type, data) {
         let newSocket = socket
         if (newSocket == null || newSocket?.readyState != WebSocket.OPEN) {
             newSocket = connect()
@@ -51,7 +53,7 @@ const PrinterProvider = ({ children }) => {
 
         if (newSocket && newSocket.readyState === WebSocket.OPEN) {
             setPrinting(true)
-            newSocket.send(JSON.stringify({ device, device_type: deviceType, ...data }));
+            newSocket.send(JSON.stringify({ device, device_type: type, ...data }));
         }
     }
 

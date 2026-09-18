@@ -73,6 +73,9 @@ function Content({ report, reprint }) {
             {renderDivider()}
             {renderTitle('SALES BREAKDOWN')}
 
+            {renderGridItem('VATable Sales: ', clip(0))}
+            {renderGridItem('VAT-Exempt Sales: ', clip(report.sales?.totalSalesWithoutMemberDiscount))}
+            {renderGridItem('Zero-Rated Sales: ', clip(0))}
             {renderGridItem('Gross Sales: ', clip(report.sales?.totalSalesWithoutMemberDiscount))}
             {renderGridItem('Less Discount: ', clip(report.sales?.totalMemberDiscount))}
             {renderGridItem('Less Cancelled: ', clip(report.salesAdjustment.cancelled))}

@@ -11,37 +11,44 @@ import { IoMdPrint } from 'react-icons/io';
 
 const ReceiptModal = ({ open, disableCloseAfterPrinting, reprint, onClose, onPrint, receipt, transaction, forceShow }) => {
 
-    const { toPDF, targetRef } = usePDF({filename: `invoice-${transaction?.invoiceNumber}.pdf`, page: { format: 'letter' } });
-    
+    const { toPDF, targetRef } = usePDF({ filename: `invoice-${transaction?.invoiceNumber}.pdf`, page: { format: 'letter' } });
+
     useEffect(() => {
-        if(open) {
+        if (open) {
             console.warn('transaction', transaction)
         }
     }, [open])
 
     const handlePrint = async (index) => {
         try {
-            await onPrint({ 
-                ...receipt, 
+            await onPrint({
+                ...receipt,
                 reprint,
                 transaction,
                 dvoteDetails,
                 companyCopy: index != 0
             })
-            if(!disableCloseAfterPrinting) {
+            if (!disableCloseAfterPrinting) {
                 onClose()
             }
         } catch {
-            
+
         }
     }
     const handlePrint2 = async () => {
         try {
-            await onPrint({ 
-                ...receipt, 
+            await onPrint({
+                ...receipt,
                 reprint,
                 transaction,
                 dvoteDetails,
+            })
+            await onPrint({
+                ...receipt,
+                reprint,
+                transaction,
+                dvoteDetails,
+                companyCopy: true
             })
             // await onPrint({ 
             //     ...receipt, 
@@ -50,18 +57,11 @@ const ReceiptModal = ({ open, disableCloseAfterPrinting, reprint, onClose, onPri
             //     dvoteDetails,
             //     companyCopy: true
             // })
-            // await onPrint({ 
-            //     ...receipt, 
-            //     reprint,
-            //     transaction,
-            //     dvoteDetails,
-            //     companyCopy: true
-            // })
-            if(!disableCloseAfterPrinting) {
+            if (!disableCloseAfterPrinting) {
                 onClose()
             }
         } catch {
-            
+
         }
     }
     const printLabel = reprint ? 'Reprint' : 'Print'
@@ -70,7 +70,7 @@ const ReceiptModal = ({ open, disableCloseAfterPrinting, reprint, onClose, onPri
         <Dialog open={open} onClose={!forceShow ? onClose : null} maxWidth="sm" fullWidth>
             <DialogContent >
                 <Box ref={targetRef} p={2} pr={1}>
-                    <Receipt transaction={transaction}/>
+                    <Receipt transaction={transaction} />
                 </Box>
             </DialogContent>
             <DialogActions>
@@ -91,7 +91,7 @@ const ReceiptModal = ({ open, disableCloseAfterPrinting, reprint, onClose, onPri
                 </Stack>
             </DialogActions>
         </Dialog>
-    )    
+    )
 }
 
 export default ReceiptModal

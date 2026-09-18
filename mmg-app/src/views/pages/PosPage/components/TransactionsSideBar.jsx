@@ -65,7 +65,7 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
         'transactions',
         () => transaction.GetAllTransaction(),
     );
-    
+
     const [searchFilter, setSearchFilter] = useState(null);
     const [transactions, setTransactions] = useState(data);
     const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTER);
@@ -134,7 +134,7 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
             transactions = transactions?.filter(
                 (transaction) =>
                     transaction?.transactionNo?.startsWith(searchFilter) ||
-                    transaction?.invoiceNo?.startsWith(searchFilter) || // Added filter for invoice number
+                    transaction?.invoiceNumber?.toString().startsWith(searchFilter) || // Changed to invoiceNumber
                     toLower(transaction?.customer?.firstName)?.startsWith(toLower(searchFilter)) ||
                     toLower(transaction?.customer?.lastName)?.startsWith(toLower(searchFilter))
             );
@@ -180,15 +180,15 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
                         <TableRow>
                             <TableCell>Action</TableCell>
                             <TableCell sx={{ textWrap: 'nowrap' }}>Invoice #</TableCell>
-                                <TableCell sx={{ textWrap: 'nowrap' }}>Serial #</TableCell>
-                                <TableCell sx={{ textWrap: 'nowrap' }}>Adjustment Reference #</TableCell>
-                                <TableCell>Date</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell>Cashier</TableCell>
-                                <TableCell>Customer</TableCell>
-                                <TableCell>Gross Sale</TableCell>
-                                <TableCell>Member Discount</TableCell>
-                                <TableCell>Net Sale</TableCell>
+                            <TableCell sx={{ textWrap: 'nowrap' }}>Serial #</TableCell>
+                            <TableCell sx={{ textWrap: 'nowrap' }}>Adjustment Reference #</TableCell>
+                            <TableCell>Date</TableCell>
+                            <TableCell>Status</TableCell>
+                            <TableCell>Cashier</TableCell>
+                            <TableCell>Customer</TableCell>
+                            <TableCell>Gross Sale</TableCell>
+                            <TableCell>Member Discount</TableCell>
+                            <TableCell>Net Sale</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -220,10 +220,10 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
                                         size="small"
                                         variant="outlined"
                                         color={
-                                                transaction.status === 'completed'
-                                                    ? 'success'
-                                                    : transaction.status === 'hold'
-                                                        ? 'info' : 'error' 
+                                            transaction.status === 'completed'
+                                                ? 'success'
+                                                : transaction.status === 'hold'
+                                                    ? 'info' : 'error'
                                         }
                                     />
                                 </TableCell>
@@ -231,9 +231,9 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
                                 <TableCell>{transaction.customer?.name}</TableCell>
                                 <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled', 'refunded'].includes(transaction.status) || !transaction.serialNumber ? transaction.totalSalesWithoutMemberDiscount.toFixed(2) : null}</TableCell>
                                 <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled', 'refunded'].includes(transaction.status) || !transaction.serialNumber ? transaction.totalMemberDiscount.toFixed(2) : null}</TableCell>
-                                <TableCell sx={{ textWrap: 'nowrap' }}>{transaction.status != 'cancelled' || !transaction.serialNumber ? transaction.totalNetSales.toFixed(2) : null}</TableCell>                                    
-                                
-                                
+                                <TableCell sx={{ textWrap: 'nowrap' }}>{transaction.status != 'cancelled' || !transaction.serialNumber ? transaction.totalNetSales.toFixed(2) : null}</TableCell>
+
+
                             </TableRow>
                         ))}
                     </TableBody>
@@ -375,7 +375,7 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
                             />
                         </>
                     )}
-                    <Button variant="contained"  onClick={resetFilters}>
+                    <Button variant="contained" onClick={resetFilters}>
                         Reset
                     </Button>
                     <Box flex={1} />

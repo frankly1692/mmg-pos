@@ -42,7 +42,9 @@ const Checkout = ({ combinedData, handleBack, handleSuccessTrans, ar }) => {
     const tenderFieldRef = useRef(null);
     const [isChipClicked, setIsChipClicked] = useState(false);
     const [loading, setLoading] = useState(false);
-    const paymentTypes = ['cash', 'cheque',  'charge'];
+    const paymentTypes = ['cash', 'cheque'];
+
+    // const paymentTypes = ['cash', 'cheque',  'charge'];
     // const paymentTypes = ['cash', 'cheque',  'charge', 'credit card', 'debit card', 'e-wallet',];
 
     const { refetch: refetchCashierReport } = useCashierReport()

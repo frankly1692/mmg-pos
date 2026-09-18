@@ -10,8 +10,9 @@ import { useAuth } from 'providers/AuthProvider';
 
 export default memo(function ({ disabled, onSuccess, transaction: transactionData }) {
     const { mutateAsync, isLoading } = useMutation(transaction.CreateTransactionV2)
-    const { branch } = useAuth()
-    
+    const { mutateAsync: cancelTransaction, isLoading: isCancelling } = useMutation(transaction.CancelTransaction)
+    const { branch, user } = useAuth()
+
     const [open, setOpen] = useState(false);
 
     const onToggle = () => {
@@ -26,6 +27,19 @@ export default memo(function ({ disabled, onSuccess, transaction: transactionDat
                 onToggle()
             })
     };
+
+    const handleVoid = () => {
+        cancelTransaction({
+            branchId: branch?.id,
+            cashierId: user?._id || user?.id,
+            invoiceNumber: transactionData?.invoiceNumber,
+            status: 'cancelled',
+            reason: 'Voided from hold dialog'
+        }).then(() => {
+            onSuccess()
+            onToggle()
+        })
+    }
 
     useHotkeys('f8', onToggle, { preventDefault: true });
 
@@ -48,10 +62,15 @@ export default memo(function ({ disabled, onSuccess, transaction: transactionDat
                         <Typography variant="h4">Are you sure you want to hold this transaction?</Typography>
                     </DialogTitle>
                     <DialogActions>
-                        <Button disabled={isLoading} onClick={onToggle}>
+                        <Button disabled={isLoading || isCancelling} onClick={onToggle}>
                             Cancel
                         </Button>
-                        <Button disabled={isLoading} variant="contained" color="primary" onClick={handleSubmit}>
+                        {transactionData?.id && (
+                            <Button disabled={isLoading || isCancelling} color="error" onClick={handleVoid}>
+                                {isCancelling ? 'Loading' : 'Void'}
+                            </Button>
+                        )}
+                        <Button disabled={isLoading || isCancelling} variant="contained" color="primary" onClick={handleSubmit}>
                             {isLoading ? 'Loading' : 'Yes'}
                         </Button>
                     </DialogActions>

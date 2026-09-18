@@ -310,7 +310,7 @@ const PosComponent = () => {
       if (packageDiscount.type === 'percentage') {
         totalLabTestDiscountedPrice = totalLabTestPrice - totalLabTestPrice * (selectedPackagesX.packages[0].discount.value / 100);
       }
-    } 
+    }
 
 
     // Combine prices (packages, promos, lab tests)
@@ -340,7 +340,7 @@ const PosComponent = () => {
         type: 'percentage',
         value: selectedPackagesX.packages[0].discount.value,
         name: selectedPackagesX.packages[0].discount.name,
-        totalDiscount: (totalPackagePrice.originalPrice + totalLabTestPrice) * (selectedPackagesX.packages[0].discount.value/100)
+        totalDiscount: (totalPackagePrice.originalPrice + totalLabTestPrice) * (selectedPackagesX.packages[0].discount.value / 100)
       });
     } else if (
       selectedPackagesX.packages.length > 0 &&
@@ -438,7 +438,7 @@ const PosComponent = () => {
         break;
     }
 
-    if(['package', 'promo'].includes(item.packageType)) {
+    if (['package', 'promo'].includes(item.packageType)) {
       await showCustomerDisplay('item', { ...item, price: item.totalDiscountedPrice })
     } else {
       await showCustomerDisplay('item', { ...item })
@@ -481,7 +481,7 @@ const PosComponent = () => {
   };
 
   const handleClearItems = async (id, reason) => {
-  
+
     const combinedDataX = [...selectedPackagesX.packages, ...selectedPackagesX.promos, ...selectedPackagesX.labtests];
     const newMapData = {
       id: id,
@@ -562,10 +562,11 @@ const PosComponent = () => {
       });
 
       setTransactionData({
-        id: selectedTransaction?._id
+        id: selectedTransaction?._id,
+        invoiceNumber: selectedTransaction?.invoiceNumber
       });
 
-      setReferenceNumber(selectedTransaction?.invoiceNo);
+      setReferenceNumber(selectedTransaction?.invoiceNumber);
 
       // Refactor to handle both array and single item cases for items
       const services = selectedTransaction?.services;
@@ -749,26 +750,27 @@ const PosComponent = () => {
 
   const combinedDataX = [...selectedPackagesX.packages, ...selectedPackagesX.promos, ...selectedPackagesX.labtests];
 
-    const combinedData = {
-      id: transactionData?.id,
-      customerData: customerData,
-      requestedById: requestedBy.id,
-      requestedByName: requestedBy.name,
-      referredById: referredBy.id,
-      referredByName: referredBy.name,
-      transactionNumber: transactionData?.transactionNo,
-      transactionDate: transactionData?.transactionDate,
-      cashierId: sessionItems?._id,
-      cashierName: `${sessionItems?.firstName} ${sessionItems?.lastName}`,
-      branchName: branch?.name,
-      branchTIN: branch?.tin,
-      branchAddress: `${branch?.streetAddress} ${branch?.state}`,
-      discountApplied: appliedDiscount,
-      promoDiscount: selectedPackagesX.promos[0]?.discount?.value || 0,
-      subTotal: subTotal,
-      paymentDue: total,
-      items: combinedDataX
-    };
+  const combinedData = {
+    id: transactionData?.id,
+    invoiceNumber: transactionData?.invoiceNumber,
+    customerData: customerData,
+    requestedById: requestedBy.id,
+    requestedByName: requestedBy.name,
+    referredById: referredBy.id,
+    referredByName: referredBy.name,
+    transactionNumber: transactionData?.transactionNo,
+    transactionDate: transactionData?.transactionDate,
+    cashierId: sessionItems?._id,
+    cashierName: `${sessionItems?.firstName} ${sessionItems?.lastName}`,
+    branchName: branch?.name,
+    branchTIN: branch?.tin,
+    branchAddress: `${branch?.streetAddress} ${branch?.state}`,
+    discountApplied: appliedDiscount,
+    promoDiscount: selectedPackagesX.promos[0]?.discount?.value || 0,
+    subTotal: subTotal,
+    paymentDue: total,
+    items: combinedDataX
+  };
 
   if (checkout) {
     return <Checkout combinedData={combinedData} handleBack={handleBackPos} handleSuccessTrans={handleSuccessTrans} />;
@@ -944,10 +946,10 @@ const PosComponent = () => {
                   />
                 </Grid>
                 <Grid item xs={12} lg={6}>
-                  <HoldItems 
+                  <HoldItems
                     transaction={combinedData}
-                    onSuccess={() => handleBackPos('success')} 
-                    disabled={!customerData?.name} 
+                    onSuccess={() => handleBackPos('success')}
+                    disabled={!customerData?.name}
                   />
                 </Grid>
                 <Grid item xs={12} lg={6}>
@@ -991,8 +993,8 @@ const PosComponent = () => {
                   flexBasis: 0.75,
                   opacity:
                     selectedPackagesX?.packages?.length === 0 &&
-                    selectedPackagesX?.promos?.length === 0 &&
-                    selectedPackagesX?.labtests?.length === 0
+                      selectedPackagesX?.promos?.length === 0 &&
+                      selectedPackagesX?.labtests?.length === 0
                       ? 0.5
                       : 1,
                   mt: 2,
@@ -1080,9 +1082,9 @@ const PosComponent = () => {
                 rowSpacing={0.5}
                 sx={
                   !customerData?.name ||
-                  (selectedPackagesX?.packages?.length === 0 &&
-                    selectedPackagesX?.promos?.length === 0 &&
-                    selectedPackagesX?.labtests?.length === 0)
+                    (selectedPackagesX?.packages?.length === 0 &&
+                      selectedPackagesX?.promos?.length === 0 &&
+                      selectedPackagesX?.labtests?.length === 0)
                     ? { opacity: 0.5 }
                     : {}
                 }
@@ -1182,7 +1184,7 @@ const PosComponent = () => {
         <AddCustomerModal
           open={addCustomerModalOpen}
           onClose={() => setAddCustomerModalOpen(false)}
-          // onAddCustomer={handleAddCustomer}
+        // onAddCustomer={handleAddCustomer}
         />
         <AddDoctorModal open={addDoctorModalOpen} onClose={() => setAddDoctorModalOpen(false)}></AddDoctorModal>
         <RightDrawer open={drawerOpen} setOpen={setDrawerOpen}>

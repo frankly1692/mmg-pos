@@ -6,7 +6,7 @@ import { startCase, toLower, upperCase } from 'lodash';
 
 export default function ({ transaction }) {
     const computeDiscount = (discount, sale) => {
-        if(discount.type == "fixed")
+        if (discount.type == "fixed")
             return discount.value
 
         return sale * (discount.value / 100)
@@ -18,7 +18,7 @@ export default function ({ transaction }) {
 
     const discounts = transaction.discounts.filter(item => !!item.memberType)
 
-    console.warn('transaction', discounts)
+    console.log('transaction', discounts)
 
     return (
         <Box sx={{ p: 3, border: '1px solid #000' }}>
@@ -32,7 +32,7 @@ export default function ({ transaction }) {
                 Medical Mission Group Multipurpose Cooperative-Albay
             </Typography>
             <Typography align="center">
-                NON-VAT REG TIN {transaction.branch.tin}
+                VAT REG TIN {transaction.branch.tin}
             </Typography>
             <Typography align="center" mb={2}>
                 {transaction.branch.streetAddress}
@@ -50,7 +50,7 @@ export default function ({ transaction }) {
                     </Stack>
                 ) : (
                     <Stack direction="row" justifyContent="space-between">
-                        <Typography>{startCase(toLower(transaction.status))} Number:</Typography>
+                        <Typography>Serial Number:</Typography>
                         <Typography>{String(transaction?.serialNumber).padStart(6, '0')}</Typography>
                     </Stack>
                 )}
@@ -95,7 +95,7 @@ export default function ({ transaction }) {
                 </Stack>
                 <Stack direction="row" justifyContent="space-between">
                     <Typography>TIN:</Typography>
-                    <Typography>{transaction.customer.tin}</Typography>
+                    <Typography>{transaction.customer.tin_number}</Typography>
                 </Stack>
                 <Stack direction="row" justifyContent="space-between">
                     <Typography>Age:</Typography>
@@ -114,7 +114,7 @@ export default function ({ transaction }) {
                     <Typography variant="h6">{combinedData.customer.customerTypeId || '---'}</Typography>
                 </Stack> */}
             </Box>
-            <Divider sx={{ mb: 1 }}/>
+            <Divider sx={{ mb: 1 }} />
             <Box sx={{ mb: 1 }}>
                 <Grid mb={1} container direction="row" justifyContent="space-between" >
                     <Grid item xs={6}>
@@ -135,52 +135,52 @@ export default function ({ transaction }) {
                 <Grid container>
                     {Object.values(Object.groupBy(transaction?.transactionItems, value => value.package?._id))
                         .map((transactionItems, index, array) => {
-                        const pack = transactionItems[0]?.package
-                        const discount = transaction.discounts.filter(item => pack?._id ? item.packageId == pack._id : true)?.[0]
+                            const pack = transactionItems[0]?.package
+                            const discount = transaction.discounts.filter(item => pack?._id ? item.packageId == pack._id : true)?.[0]
 
-                        return (
-                            <>
-                                {pack && (
-                                    <Grid item xs={12}>
-                                        <Typography variant="h5" fontWeight='medium' >
-                                            {`> ${pack.name}`} 
-                                        </Typography>
-                                    </Grid>
-                                )}
-                                
-                                {transactionItems.map((item) => (
-                                    <>
-                                        <Grid item xs={6}><Typography ml={pack ? 3 : 0}>{item.name}</Typography></Grid>
-                                        <Grid item xs={2}><Typography >({item.quantity})</Typography></Grid>
-                                        <Grid item xs={2}>
-                                            <Typography>
-                                                {transaction.status != 'completed' && <>- </>}
-                                                {item.price.toFixed(2)}
+                            return (
+                                <>
+                                    {pack && (
+                                        <Grid item xs={12}>
+                                            <Typography variant="h5" fontWeight='medium' >
+                                                {`> ${pack.name}`}
                                             </Typography>
                                         </Grid>
-                                        <Grid item xs={2}>
-                                            <Typography align='right'>
-                                                {transaction.status != 'completed' && <>- </>}
-                                                {item.price.toFixed(2)}
-                                            </Typography>
-                                        </Grid>
-                                    </>
-                                ))}
-                                {
-                                    pack && discount && !discount?.memberType && (
-                                        <Grid item xs={12} mb={1}>
-                                            <Stack direction='row' justifyContent='space-between' alignItems='center'>
-                                                <Typography ml={3} variant="h5" fontWeight='regular' >
-                                                    - Less: {discount.name} Discount
+                                    )}
+
+                                    {transactionItems.map((item) => (
+                                        <>
+                                            <Grid item xs={6}><Typography ml={pack ? 3 : 0}>{item.name}</Typography></Grid>
+                                            <Grid item xs={2}><Typography >({item.quantity})</Typography></Grid>
+                                            <Grid item xs={2}>
+                                                <Typography>
+                                                    {transaction.status != 'completed' && <>- </>}
+                                                    {item.price.toFixed(2)}
                                                 </Typography>
-                                                <Typography variant="h5" fontWeight='regular'>- {computeDiscount(discount, transaction.totalGrossSales).toFixed(2)}</Typography>
-                                            </Stack>
-                                        </Grid>
-                                    )
-                                }
-                            </>
-                        );
-                    })}
+                                            </Grid>
+                                            <Grid item xs={2}>
+                                                <Typography align='right'>
+                                                    {transaction.status != 'completed' && <>- </>}
+                                                    {item.price.toFixed(2)}
+                                                </Typography>
+                                            </Grid>
+                                        </>
+                                    ))}
+                                    {
+                                        pack && discount && !discount?.memberType && (
+                                            <Grid item xs={12} mb={1}>
+                                                <Stack direction='row' justifyContent='space-between' alignItems='center'>
+                                                    <Typography ml={3} variant="h5" fontWeight='regular' >
+                                                        - Less: {discount.name} Discount
+                                                    </Typography>
+                                                    <Typography variant="h5" fontWeight='regular'>- {computeDiscount(discount, transaction.totalGrossSales).toFixed(2)}</Typography>
+                                                </Stack>
+                                            </Grid>
+                                        )
+                                    }
+                                </>
+                            );
+                        })}
                 </Grid>
             </Box>
             {/* {
@@ -199,22 +199,58 @@ export default function ({ transaction }) {
                     <Typography color='black' fontWeight='bold'>Total Sales:</Typography>
                     <Typography color='black' fontWeight='bold'>{transaction.totalSalesWithoutMemberDiscount.toFixed(2)}</Typography>
                 </Stack>
+                {discounts.length > 0 ? (
+                    <>
+                        <Stack direction="row" justifyContent="space-between">
+                            <Typography>Less Discount: </Typography>
+                        </Stack>
+                        <Stack sx={{ ml: 3 }} direction="row" justifyContent="space-between">
+                            <Typography>- {discounts[0].value}% {startCase(discounts[0].memberType)}: </Typography>
+                            <Typography variant="h5">
+                                {transaction.totalMemberDiscount.toFixed(2)}
+                            </Typography>
+                        </Stack>
+                    </>
+                ) : (
+                    <>
+                        <Stack direction="row" justifyContent="space-between">
+                            <Typography>Less Discount: </Typography>
+                            <Typography variant="h5">
+                                0.00
+                            </Typography>
+                        </Stack>
+                    </>
+                )}
                 <Stack direction="row" justifyContent="space-between">
-                    <Typography>Less Discount{discounts.length > 0 ? ` (${upperCase(discounts[0].memberType)})` : ''}: </Typography>
+                    <Typography>Net Sales:</Typography>
+                    <Typography variant='h5'>{transaction.totalNetSales.toFixed(2)}</Typography>
+                </Stack>
+                <Divider sx={{ my: 1 }} />
+
+                <Stack direction="row" justifyContent="space-between">
+                    <Typography>Vatable Amount:</Typography>
                     <Typography variant="h5">
-                        {discounts.length > 0 ? `${discounts[0].value}%` : ''} ({transaction.totalMemberDiscount})
+                        0.00
                     </Typography>
                 </Stack>
                 <Stack direction="row" justifyContent="space-between">
-                    <Typography>Less Withholding Tax:</Typography>
+                    <Typography>Vat Exempt Amount</Typography>
                     <Typography variant="h5">
-                        (0)
+                        {transaction.totalNetSales.toFixed(2)}
                     </Typography>
-                </Stack>    
+                </Stack>
+                <Stack direction="row" justifyContent="space-between">
+                    <Typography>12% Vat</Typography>
+                    <Typography variant="h5">
+                        0.00
+                    </Typography>
+                </Stack>
                 <Stack direction="row" justifyContent="space-between" mb={1}>
                     <Typography color='black' fontWeight='bold'>TOTAL AMOUNT DUE:</Typography>
                     <Typography variant="h5" color='black' fontWeight='bold'>{transaction.totalNetSales.toFixed(2)}</Typography>
                 </Stack>
+
+                <Divider sx={{ my: 1 }} />
                 <Stack direction="row" justifyContent="space-between">
                     <Typography>Tender Amount:</Typography>
                     <Typography variant="h5">{transaction.tender?.amount?.toFixed(2)}</Typography>
@@ -240,16 +276,13 @@ export default function ({ transaction }) {
                     )
                 }
             </Box>
-            <Box mb={2} align="center" sx={{ py: 2 }}>
-                <Typography variant='subtitle2' color='black' fontWeight='bold'>*THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX*</Typography>
-            </Box>
 
             {discounts.length > 0 && (
                 <Box border={1} borderColor='grey.300'>
-                    <Table 
-                    
-                        sx={{ 
-                            '& .MuiTableCell-root': { 
+                    <Table
+
+                        sx={{
+                            '& .MuiTableCell-root': {
                                 fontSize: '14px',
                                 px: 1,
                                 py: 0.4,
@@ -261,11 +294,7 @@ export default function ({ transaction }) {
                         <TableBody>
                             <TableRow>
                                 <TableCell sx={{ lineHeight: 1 }}>
-                                    ID Number {` (${upperCase(discounts[0].memberType)})`}: 
-                                    {/* <br />
-                                    <Typography variant="caption" fontStyle='italic' >
-                                        (SC/PWD/NAAC/SP)
-                                    </Typography> */}
+                                    ID Number:
                                 </TableCell>
                                 <TableCell width='40%' align='right'>
                                     {transaction.totalMemberDiscount > 0 && transaction.customer.customer_type_id}
@@ -299,7 +328,7 @@ export default function ({ transaction }) {
                 <Typography variant="h6">PTU No: {dvoteDetails[0]?.ptuNo}</Typography>
                 <Typography variant="h6">Date Issued: {dvoteDetails[0]?.ptuDateIssued}</Typography>
             </Box>
-           
+
         </Box>
     );
 };

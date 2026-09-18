@@ -30,7 +30,7 @@ const ReceiptContent = ({ combinedData, amountGiven, change, tenderType, showAdd
                 Medical Mission Group Multipurpose Cooperative-Albay
             </Typography>
             <Typography variant="subtitle2" align="center">
-                NON-VAT REG TIN {combinedData?.branchTIN}
+                VAT REG TIN {combinedData?.branchTIN}
             </Typography>
             <Typography variant="subtitle2" align="center" mb={2}>
                 {combinedData?.branchAddress}

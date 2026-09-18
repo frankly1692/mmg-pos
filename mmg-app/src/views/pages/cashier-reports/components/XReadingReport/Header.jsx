@@ -16,7 +16,7 @@ function Header({ report }) {
                     Medical Mission Group Multipurpose Cooperative-Albay
                 </Typography>
                 <Typography variant="subtitle2" align="center">
-                    NON-VAT REG TIN {report?.branch?.tin}
+                    VAT REG TIN {report?.branch?.tin}
                 </Typography>
                 <Typography variant="subtitle2" align="center" mb={2}>
                     {/* {combinedData?.branchAddress} */}

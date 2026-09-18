@@ -27,11 +27,11 @@ export default function ({ transaction, }) {
     };
 
     const renderButton = () => (
-        
-        <Button 
-            onClick={() => setOpen(true)} 
-            startIcon={<VisibilityIcon fontSize="small" />} 
-            variant="contained" 
+
+        <Button
+            onClick={() => setOpen(true)}
+            startIcon={<VisibilityIcon fontSize="small" />}
+            variant="contained"
             size="small"
             color="primary"
         >
@@ -46,7 +46,7 @@ export default function ({ transaction, }) {
             {renderButton()}
             <WithPrintMutation>
                 {(props) => (
-                    <ReceiptModal 
+                    <ReceiptModal
                         {...props}
                         reprint
                         open={open}

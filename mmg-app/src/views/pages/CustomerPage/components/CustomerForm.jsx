@@ -46,6 +46,26 @@ const CustomerSchema = Yup.object().shape({
     age: Yup.number().required('Customer Type is required'),
     customerType: Yup.string().required('Customer Type is required'),
     customerTypeId: Yup.string()
+        .when('customerType', {
+            is: (val) => val === 'seniorcitizenpwd' || val === 'solo-parent',
+            then: (schema) => schema.required('ID Number is required'),
+            otherwise: (schema) => schema
+        }),
+    childName: Yup.string().when('customerType', {
+        is: 'solo-parent',
+        then: (schema) => schema.required('Child Name is required'),
+        otherwise: (schema) => schema
+    }),
+    childBirthDate: Yup.string().when('customerType', {
+        is: 'solo-parent',
+        then: (schema) => schema.required('Child Birth Date is required').nullable(),
+        otherwise: (schema) => schema.nullable()
+    }),
+    childAge: Yup.string().when('customerType', {
+        is: 'solo-parent',
+        then: (schema) => schema.required('Child Age is required'),
+        otherwise: (schema) => schema
+    })
 });
 
 const calculateAge = (birthDate) => {
@@ -88,6 +108,9 @@ const CustomerForm = () => {
             customerTypeId: '',
             tinNumber: '',
             age: '',
+            childName: '',
+            childBirthDate: null,
+            childAge: '',
             address: {
                 street: '',
                 barangay: '',
@@ -100,7 +123,7 @@ const CustomerForm = () => {
 
     const [initialData, setInitialData] = useState(null);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+
 
     const [provinces, setProvinces] = useState([]);
     const [municipalities, setMunicipalities] = useState({});
@@ -173,6 +196,15 @@ const CustomerForm = () => {
         }
     }, [birthDate, setValue]);
 
+    const childBirthDate = watch('childBirthDate');
+
+    useEffect(() => {
+        if (childBirthDate) {
+            const age = calculateAge(childBirthDate);
+            setValue('childAge', age.toString());
+        }
+    }, [childBirthDate, setValue]);
+
     const handleNavigation = () => {
         navigate('/dashboard/customers');
     };
@@ -195,7 +227,8 @@ const CustomerForm = () => {
             toast.error('Error creating customer.');
         },
         onSuccess: () => {
-            toast.success('Customer created successfully.', { onClose: handleNavigation });
+            toast.success('Customer created successfully.');
+            handleNavigation();
         },
         onSettled: () => {
             queryClient.invalidateQueries('customers');
@@ -221,7 +254,8 @@ const CustomerForm = () => {
             toast.error('Error editing customer.');
         },
         onSuccess: () => {
-            toast.success('Customer edited successfully.', { onClose: handleNavigation });
+            toast.success('Customer edited successfully.');
+            handleNavigation();
         },
         onSettled: () => {
             queryClient.invalidateQueries('customers');
@@ -243,13 +277,18 @@ const CustomerForm = () => {
         }
     }, [initialData, reset]);
 
+    const isSubmitting = createCustomerMutation.isLoading || editCustomerMutation.isLoading;
+
     const onSubmit = async (data) => {
+        if (isSubmitting) return;
+
         const newData = {
             ...data,
-            birthDate: moment(data?.birthDate).format('MM/DD/YYYY')
+            birthDate: moment(data?.birthDate).format('MM/DD/YYYY'),
+            childBirthDate: data?.childBirthDate ? moment(data?.childBirthDate).format('MM/DD/YYYY') : null
         };
         console.log('data', newData);
-        setIsSubmitting(true);
+
         try {
             if (initialData) {
                 await editCustomerMutation.mutateAsync({ id: initialData._id, ...data });
@@ -258,8 +297,6 @@ const CustomerForm = () => {
             }
         } catch (error) {
             console.error('Error submitting form:', error);
-        } finally {
-            setIsSubmitting(false);
         }
     };
 
@@ -281,6 +318,9 @@ const CustomerForm = () => {
                 country: ''
             }
         });
+        setValue('childName', '');
+        setValue('childBirthDate', null);
+        setValue('childAge', '');
         setSelectedProvince('');
         setSelectedMunicipality('');
     };
@@ -492,17 +532,18 @@ const CustomerForm = () => {
                                         <MenuItem value="officer-treasurer">Officer Treasure</MenuItem>
                                         <MenuItem value="officer-committer-officers">Officer Committee Officers</MenuItem>
                                         <MenuItem value="associate-member">Associate Member</MenuItem>
+                                        <MenuItem value="solo-parent">Solo Parent</MenuItem>
                                     </TextField>
                                 )}
                             />
-                            {watch('customerType') === 'seniorcitizenpwd' && (
+                            {(watch('customerType') === 'seniorcitizenpwd' || watch('customerType') === 'solo-parent') && (
                                 <Controller
                                     name="customerTypeId"
                                     control={control}
                                     render={({ field }) => (
                                         <TextField
                                             {...field}
-                                            label="SC/PWD ID No."
+                                            label={watch('customerType') === 'solo-parent' ? "Solo Parent ID No." : "SC/PWD ID No."}
                                             variant="outlined"
                                             fullWidth
                                             error={!!errors.customerTypeId}
@@ -510,6 +551,68 @@ const CustomerForm = () => {
                                         />
                                     )}
                                 />
+                            )}
+                            {watch('customerType') === 'solo-parent' && (
+                                <>
+                                    <Typography variant="h6">Child Information</Typography>
+                                    <Controller
+                                        name="childName"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <TextField
+                                                {...field}
+                                                label="Child Name*"
+                                                variant="outlined"
+                                                fullWidth
+                                                error={!!errors.childName}
+                                                helperText={errors.childName?.message}
+                                            />
+                                        )}
+                                    />
+                                    <LocalizationProvider dateAdapter={AdapterMoment}>
+                                        <Controller
+                                            name="childBirthDate"
+                                            control={control}
+                                            render={({ field: { onChange, value } }) => (
+                                                <DatePicker
+                                                    label="Child Birth Date*"
+                                                    inputFormat="MM/DD/YYYY"
+                                                    value={formatValue(value)}
+                                                    onChange={(newValue) => {
+                                                        onChange(newValue);
+                                                    }}
+                                                    renderInput={(params) => (
+                                                        <TextField
+                                                            {...params}
+                                                            variant="outlined"
+                                                            fullWidth
+                                                            error={!!errors.childBirthDate}
+                                                            helperText={errors.childBirthDate?.message}
+                                                        />
+                                                    )}
+                                                />
+                                            )}
+                                        />
+                                    </LocalizationProvider>
+                                    <Controller
+                                        name="childAge"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <TextField
+                                                {...field}
+                                                label="Child Age"
+                                                variant="outlined"
+                                                fullWidth
+                                                disabled
+                                                error={!!errors.childAge}
+                                                helperText={errors.childAge?.message}
+                                                InputProps={{
+                                                    readOnly: true
+                                                }}
+                                            />
+                                        )}
+                                    />
+                                </>
                             )}
                             <Typography variant="h6">Address</Typography>
                             <Controller
