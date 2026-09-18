@@ -58,6 +58,7 @@ class TransactionItem(Labtest):
 
 
 class BaseTransaction(BaseModel):
+    transactionNumber: Optional[str] = None
     status: TransactionStatus = TransactionStatus.COMPLETED
     date: str = Field(default_factory=getLocalDateStr)
     transactionDate: str = Field(default_factory=getLocalTimeStr)
@@ -240,6 +241,7 @@ class CreateCancelledTransaction(BaseModel):
     reason: Optional[str] = None
     branchId: str
     invoiceNumber: int
+    transactionNumber: Optional[int] = None
     status: TransactionStatus
 
 class CreateRefundTransaction(CreateTransaction):

@@ -126,7 +126,10 @@ def v3_create_transaction(user_id):
         else:
             model = CreateCashTransaction(**args)
 
-        model.invoiceNumber = transactionRepository._get_next_sequence({ "type": "INVOICE_NUMBER", "cashierId": user_id })
+        if(status == TransactionStatus.COMPLETED and model.status == TransactionStatus.COMPLETED):
+            model.invoiceNumber = transactionRepository._get_next_sequence({ "type": "INVOICE_NUMBER", "cashierId": user_id })
+
+        model.transactionNumber = transactionRepository._get_next_sequence({ "type": "TRANSACTION_NUMBER", "cashierId": user_id })
         data = model.model_dump(by_alias=True, exclude={'discounts', 'transactionItems'})
         result = transactionRepository.insert_one(data)
 
@@ -164,7 +167,6 @@ def v3_create_transaction(user_id):
         if(len(transactionItems) > 0):
             itemRepository.insert_many(transactionItems)
 
-
         result = transactionRepository.find_one({ '_id': ObjectId(result['_id']) })
         return jsonify({'message': 'Transaction created successfully', 'data': result })
     except ValidationError as e:
@@ -180,65 +182,39 @@ def v3_cancel_transaction(user_id):
         args = { **request_data, "cashierCancelled": user_id }
         model = CreateCancelledTransaction(**args)
 
-        if(model.status == TransactionStatus.CANCELLED):
-            transaction = transactionRepository.find_one({ 
-                "invoiceNumber": model.invoiceNumber,  
-                "branchId": model.branchId, 
-                "status": TransactionStatus.HOLD 
-            }, agreggate=False)
+        transaction = transactionRepository.find_one({ 
+            "invoiceNumber": model.invoiceNumber, 
+            "branchId": model.branchId, 
+            "status": TransactionStatus.COMPLETED,
+            "cashierId": user_id
+        }, agreggate=False)
 
-            if(not transaction):
-                return jsonify({'message': 'Transaction not found nor allowed for cancellation', 'data': transaction })
-            
-            updateQuery =  { "status": TransactionStatus.CANCELLED }
-            transactionRepository.update_one_bare({ "_id": transaction["_id"] }, updateQuery)
-            discountRepository.update_many_bare({ "transactionId": str(transaction["_id"]) }, updateQuery)
+        if(not transaction or not transaction.get('invoiceNumber')):
+            return jsonify({'message': 'Transaction not found nor refundable (No invoice number)', 'data': transaction })
 
-            transaction = omit(transaction, "_id")
-            transaction['cashierId'] = user_id
-            transaction['serialNumber'] = transactionRepository._get_next_sequence({ "type": "CANCEL_NUMBER", "cashierId": user_id })
-            transaction['status'] = TransactionStatus.CANCELLED
-            transaction['totalNetSales'] = 0
-            transaction['totalGrossSales'] = 0
-            transaction['totalSalesWithoutMemberDiscount'] = 0
-            transaction['totalDiscount'] = 0
-            transaction['totalMemberDiscount'] = 0
-            transaction['transactionDate'] = getLocalTimeStr()
-            transaction['date'] = getLocalDateStr()
-            transaction['reason'] = model.reason
-            transactionRepository.insert_one(transaction, refetch=False)
-        
-        if(model.status == TransactionStatus.REFUNDED):
-            transaction = transactionRepository.find_one({ 
-                "invoiceNumber": model.invoiceNumber, 
-                "branchId": model.branchId, 
-                "status": TransactionStatus.COMPLETED, 
-            }, agreggate=False)
+        updateQuery =  { "status": model.status }
+        transactionRepository.update_one_bare({ "_id": transaction["_id"] }, updateQuery)
+        discountRepository.update_many_bare({ "transactionId": str(transaction["_id"]) }, updateQuery)
 
-            if(not transaction):
-                return jsonify({'message': 'Transaction not found nor refundable', 'data': transaction })
+        next_sequence = "CANCEL_NUMBER" if model.status == TransactionStatus.CANCELLED else "REFUND_NUMBER"
 
-            updateQuery =  { "status": TransactionStatus.REFUNDED }
-            transactionRepository.update_one_bare({ "_id": transaction["_id"] }, { "status": TransactionStatus.REFUNDED })
-            discountRepository.update_many_bare({ "transactionId": str(transaction["_id"]) }, updateQuery)
-
-            transaction = omit(transaction, "_id")
-            transaction['cashierId'] = user_id
-            transaction['serialNumber'] = transactionRepository._get_next_sequence({ "type": "REFUND_NUMBER", "cashierId": user_id })
-            transaction['status'] = TransactionStatus.REFUNDED
-            transaction['totalNetSales'] = -1 * transaction['totalNetSales']
-            transaction['totalGrossSales'] = -1 * transaction['totalGrossSales']
-            transaction['totalSalesWithoutMemberDiscount'] = -1 * transaction['totalSalesWithoutMemberDiscount']
-            transaction['totalDiscount'] = -1 * transaction['totalDiscount']
-            transaction['totalMemberDiscount'] = -1 * transaction['totalMemberDiscount']
-            transaction['transactionDate'] = getLocalTimeStr()
-            transaction['date'] = getLocalDateStr()
-            transaction['reason'] = model.reason
-            transactionRepository.insert_one(transaction, refetch=False)
+        transaction = omit(transaction, "_id")
+        transaction['cashierId'] = user_id
+        transaction['transactionNumber'] = transactionRepository._get_next_sequence({ "type": "TRANSACTION_NUMBER", "cashierId": user_id })
+        transaction['serialNumber'] = transactionRepository._get_next_sequence({ "type": next_sequence, "cashierId": user_id })
+        transaction['status'] = model.status
+        transaction['totalNetSales'] = -1 * transaction['totalNetSales']
+        transaction['totalGrossSales'] = -1 * transaction['totalGrossSales']
+        transaction['totalSalesWithoutMemberDiscount'] = -1 * transaction['totalSalesWithoutMemberDiscount']
+        transaction['totalDiscount'] = -1 * transaction['totalDiscount']
+        transaction['totalMemberDiscount'] = -1 * transaction['totalMemberDiscount']
+        transaction['transactionDate'] = getLocalTimeStr()
+        transaction['date'] = getLocalDateStr()
+        transaction['reason'] = model.reason
+        transactionRepository.insert_one(transaction, refetch=False)
 
         return jsonify({'message': f'Transaction {model.status.lower()} successfully' })
     except ValidationError as e:
         return jsonify({'message': 'Unable to process data', 'error': e.errors(include_input=False)}), 500
     except Exception as e:
-        return jsonify({'message': 'Unable to cancelled transaction', 'error': repr(e)}), 500
-
+        return jsonify({'message': 'Unable to process transaction', 'error': repr(e)}), 500

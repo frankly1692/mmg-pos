@@ -53,6 +53,12 @@ def _update_customer():
       update_val['contact_number'] = request_data['contactNumber']
    if 'birthDate' in request_data:
       update_val['birthDate'] = request_data['birthDate']
+   if 'childName' in request_data:
+      update_val['child_name'] = request_data['childName']
+   if 'childBirthDate' in request_data:
+      update_val['child_birth_date'] = request_data['childBirthDate']
+   if 'childAge' in request_data:
+      update_val['child_age'] = request_data['childAge']
 
    if not update_val:
         return {

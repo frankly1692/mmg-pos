@@ -1,7 +1,7 @@
 
 
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from itertools import groupby
 
 from pydash import get
@@ -14,6 +14,7 @@ from app.repositories.report_cash_count import CashCountRepository
 from app.repositories.transaction import TransactionRepository
 from app.new_models.CashCount import _cash_keys, CashCount
 from app.utils.utils import getLocalDateStr, getLocalTime
+import json
 
 class BranchReportRepository(BackupRepository):
     _collection = 'branch_reports'
@@ -36,7 +37,6 @@ class BranchReportRepository(BackupRepository):
     def find(self, query={}, *args):
      
         try:
-            
             data = list(self._db[self._transaction_collection].aggregate([
                 { '$match': query },
                 { '$match': { "status": { "$in": [TransactionStatus.COMPLETED, TransactionStatus.REFUNDED] } } },
@@ -62,8 +62,8 @@ class BranchReportRepository(BackupRepository):
                 
                 *self._create_cashier_report_query(),
                 *self._create_branch_report_query(),
-                *self._create_net_sales_query("previousAccumulatedSales", False),
-                *self._create_net_sales_query("presentAccumulatedSales"),
+                # *self._create_net_sales_query("previousAccumulatedSales", False),
+                # *self._create_net_sales_query("presentAccumulatedSales"),
                 {
                     "$lookup": {
                         "from": self._transaction_collection,
@@ -136,7 +136,7 @@ class BranchReportRepository(BackupRepository):
             ]))
 
             reports = []
-            for item in data:
+            for index, item in enumerate(data):
                 discountSummary = {}
                 discounts = filter(lambda i: i['memberType'] is not None, item['discounts'])
                 for key, value in groupby(discounts, lambda i: i['memberType']):
@@ -172,8 +172,12 @@ class BranchReportRepository(BackupRepository):
                     transactionSummary[key] = total
                 item['transactionSummary'] = transactionSummary
 
-                item['presentAccumulatedSales'] = get(item, 'presentAccumulatedSales.totalSales', 0)
-                item['previousAccumulatedSales'] = get(item, 'previousAccumulatedSales.totalSales', 0)         
+                item['presentAccumulatedSales'] = self.calculate_accumulated_sales(item['branch']['_id'], datetime.strptime(item['date'], '%Y-%m-%d'), True)
+                item['previousAccumulatedSales'] = self.calculate_accumulated_sales(item['branch']['_id'], datetime.strptime(item['date'], '%Y-%m-%d'), False)
+
+                # item['presentAccumulatedSales'] = get(item, 'presentAccumulatedSales.totalSales', 0)
+                # item['previousAccumulatedSales'] = get(item, 'previousAccumulatedSales.totalSales', 0)         
+                item['zCounter'] = index + 1
 
                 reports.append(item)
             return reports
@@ -202,7 +206,35 @@ class BranchReportRepository(BackupRepository):
         ]
 
         return filtered_reports
-    
+
+    def calculate_accumulated_sales(self, branchId: str, date: datetime, present: bool = True):
+        queryDate = date if present else (date - timedelta(days=1))
+
+        try:
+            data = list(self._db[self._transaction_collection].aggregate([
+                { 
+                    '$match': { 
+                        "branchId": { "$eq": branchId },
+                        "status": { "$in": [TransactionStatus.COMPLETED, TransactionStatus.REFUNDED] },
+                        "date": { "$lte": str(queryDate.date()) }
+                    } 
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        'date': { '$first': '$date' },
+                        'branchId': { '$first': '$branchId' },
+                        "totalNetSales": { "$sum": "$totalNetSales" },
+                    }
+                },
+            ]))
+            # print(f"Data: {json.dumps(data, indent=2)}")
+            if(len(data) != 0):
+                return data[0]['totalNetSales']
+            return 0
+        except Exception as e:
+            raise e
+
     def _create_branch_query(self): 
         return [
             {
@@ -233,25 +265,27 @@ class BranchReportRepository(BackupRepository):
         if(not present):
             endDate = (endDate - timedelta(days=1))
         
-        typeQuery = [
-            {  "$gte": [ "$date", str(startDate.date()) ] },
-            {  "$lte": [ "$date", str(endDate.date()) ] },
-        ]
+        # typeQuery = [
+        #     {  "$gte": [ "$date", str(startDate.date()) ] },
+        #     {  "$lte": [ "$date", str(endDate.date()) ] },
+        # ]
         return [
             {
                 "$lookup": {
                     "from": self._transaction_collection,
                     "let": {
                         "branchId": "$branchId",
+                        "date": "$date"
                     },
                     "pipeline": [
                         {
                             "$match": {
                                 "$expr": {
                                     "$and": [
-                                        { "$eq": ["$branchId", "$$branchId"] },
+                                        *self._defaultFilter['$match']['$expr']['$and'],
                                         { "$eq": ["$status", TransactionStatus.COMPLETED] },
-                                        *typeQuery
+                                        { "$lte": [ "$date", "$$date" ] },
+                                        # { "$gte": [ "$date", str(startDate.date()) ] },
                                     ],
                                 }
                             }
