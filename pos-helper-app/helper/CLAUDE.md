@@ -167,3 +167,6 @@ docker-compose up --build
 - **Receipt Printer**: Epson TM-series ESC/POS, connected via TCP/IP. IP address is configurable per `settings.url` in the WebSocket message payload (default: `192.168.192.168`).
 - **VFD Customer Display**: Serial RS-232, hardcoded to `COM3` on Windows (`/dev/ttyACM1` on Linux). Uses `\x0C` (form feed) to clear the 2×20 character display.
 - Printer failure is non-fatal — the `ReceiptWriter` context manager catches errors and still completes the journal write; the response includes `"message": "Journaled successfully (printer unavailable)"`.
+
+
+https://support.clickpos.com/hc/en-us/articles/205723945-Web-POS-Epson-TM-Series-Intelligent-Printer-Setup-Slave-Ethernet

@@ -15,12 +15,31 @@ from websockets.asyncio.server import serve
 import escpos.exceptions
 from escpos.printer import Usb, Network
 
-# Write ejournal next to the .exe when frozen, or next to app.py in dev
+# Next to the .exe when frozen, or next to app.py in dev — used as a fallback only.
 _BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
-EJOURNAL_PATH = os.path.join(_BASE_DIR, "ejournal.txt")
+
+
+def _resolve_data_dir() -> str:
+    # Pin ejournal.txt (and terminal.json) to one well-known, documented location
+    # (C:\MMG-POS, per install.bat) instead of "next to wherever this process
+    # happened to be launched from". Different launch methods (dev run from a
+    # random cwd, double-clicked exe, a stray leftover process, a reinstall to a
+    # different folder) previously each resolved to a different file, so the
+    # journal appeared to "go missing" depending on which copy answered a request.
+    fixed_dir = os.environ.get("MMG_POS_DATA_DIR", r"C:\MMG-POS")
+    try:
+        os.makedirs(fixed_dir, exist_ok=True)
+        return fixed_dir
+    except Exception as e:
+        print(f"[WARN] Could not use {fixed_dir} ({e}), falling back to {_BASE_DIR}")
+        return _BASE_DIR
+
+
+_DATA_DIR = _resolve_data_dir()
+EJOURNAL_PATH = os.path.join(_DATA_DIR, "ejournal.txt")
 
 # BIR terminal credentials — stored in terminal.json on each workstation
-_TERMINAL_CONFIG_PATH = os.path.join(_BASE_DIR, "terminal.json")
+_TERMINAL_CONFIG_PATH = os.path.join(_DATA_DIR, "terminal.json")
 
 def _load_terminal_config() -> dict:
     if os.path.exists(_TERMINAL_CONFIG_PATH):
