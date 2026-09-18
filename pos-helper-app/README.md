@@ -64,6 +64,16 @@ Menu: Test Print · Settings and Logs... · Open Journal Folder · Restart · Qu
 
 **Settings and Logs...** (also the double-click action) opens one full-screen window: settings, live status, a Test Print box (free text, uses the printer IP in the field) and E-Journal buttons (Open in Notepad, Print E-Journal) on the left, the log on the right.
 
+### Provider password
+
+Settings and Logs (and Open Journal Folder) ask for the **provider password** every time they are opened, and the window closes and locks again after 10 minutes without input. Everything else (status icon, printing, Test Print, Restart) stays open to branch staff. Wrong entries are logged as `[AUTH]`, and after every 5 wrong tries in a row the prompt is refused for 30 s, doubling each time up to 15 min.
+
+- **Set at install:** the installer asks for it on a fresh install (minimum 8 characters, entered twice). Silent installs pass `/ADMINPW="password"`.
+- **Stored as a hash only:** a salted scrypt hash in `C:\MMG-POS\secure\admin.json`. The installer restricts that folder to administrators; cashiers (standard users) can read it, which the helper needs to check the password, but cannot change or delete it.
+- **Reset or change:** the password cannot be recovered. A Windows administrator runs the installer again with `/ADMINPW="new password"` (an upgrade otherwise keeps the existing one).
+- **No password set:** if a silent install omits `/ADMINPW`, the window is unlocked (logged as a warning); a damaged `admin.json` keeps it locked.
+- **Limit:** this locks the app, not Windows. A Windows administrator can still edit files in `C:\MMG-POS`, so give cashiers standard accounts.
+
 The log panel is a live viewer with filters (All / Requests / Errors and warnings / Status) and search. Every request is logged as `[REQ #n]` with its full payload and answered with `[RES #n]` with status, timing and response. Payloads can contain customer names and ID numbers — treat `helper.log` as sensitive.
 
 ## WebSocket API
@@ -141,8 +151,10 @@ Copy `MMG-Helper-Setup.exe` to each cashier PC and run it (administrator, one pr
 Silent / scripted install:
 
 ```
-MMG-Helper-Setup.exe /VERYSILENT /MIN="123-456789-0" /SN="S/N0000012345" /PTU="PTU-000000000001" /PRINTER=192.168.1.50 /COM=COM3
+MMG-Helper-Setup.exe /VERYSILENT /MIN="123-456789-0" /SN="S/N0000012345" /PTU="PTU-000000000001" /PRINTER=192.168.1.50 /COM=COM3 /ADMINPW="provider password"
 ```
+
+`/ADMINPW` is the provider password (see [Provider password](#provider-password)). Inno Setup writes the command line to its log, so do not combine `/ADMINPW` with `/LOG`.
 
 Put a `branch-defaults.ini` next to the installer to prefill shared fields:
 

@@ -16,10 +16,12 @@ import queue
 import socket
 import subprocess
 import threading
+import time
 
 import pystray
 from PIL import Image, ImageDraw
 
+import auth
 import config as helper_config
 
 GREEN, YELLOW, RED = (46, 160, 67), (227, 168, 20), (207, 34, 46)
@@ -295,6 +297,90 @@ def _settings_panel(parent, app, on_saved, get_status):
     return frame
 
 
+def _center(win, width=None, height=None):
+    """Put a window in the middle of the screen. Give width/height to also set its size;
+    otherwise it keeps the size its contents ask for."""
+    win.update_idletasks()
+    w = width or win.winfo_reqwidth()
+    h = height or win.winfo_reqheight()
+    x = max((win.winfo_screenwidth() - w) // 2, 0)
+    y = max((win.winfo_screenheight() - h) // 2, 0)
+    win.geometry(f"{w}x{h}+{x}+{y}" if (width or height) else f"+{x}+{y}")
+
+
+IDLE_LOCK_SECONDS = 10 * 60   # the window closes (and asks for the password again) after this much inactivity
+
+
+def _password_prompt(root, gate, on_success, log=print):
+    """Ask for the provider password. Non-blocking: on_success() runs after a correct entry.
+    Wrong entries go through `gate`, which adds an escalating lockout."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    dlg = tk.Toplevel(root)
+    dlg.withdraw()
+    dlg.title("MMG POS Helper")
+    dlg.resizable(False, False)
+    dlg.attributes("-topmost", True)
+
+    frame = ttk.Frame(dlg, padding=18)
+    frame.grid()
+    ttk.Label(frame, text="Provider access", font=("Segoe UI", 13, "bold")).grid(sticky="w")
+    ttk.Label(frame, text="Enter the provider password to open Settings and Logs.").grid(sticky="w", pady=(4, 10))
+    var = tk.StringVar()
+    entry = ttk.Entry(frame, textvariable=var, show="\u2022", width=34)
+    entry.grid(sticky="ew")
+    msg = tk.StringVar()
+    ttk.Label(frame, textvariable=msg, foreground="#cf222e", wraplength=300, justify="left").grid(sticky="w", pady=(6, 0))
+
+    def submit(_e=None):
+        ok, text = gate.check(var.get())
+        var.set("")
+        log(f"[AUTH] Settings and Logs {'unlocked' if ok else 'password rejected: ' + text}")
+        if ok:
+            dlg.destroy()
+            on_success()
+        else:
+            msg.set(text)
+            entry.focus_force()
+
+    buttons = ttk.Frame(frame)
+    buttons.grid(sticky="e", pady=(12, 0))
+    ttk.Button(buttons, text="Cancel", command=dlg.destroy).pack(side="right", padx=(8, 0))
+    ttk.Button(buttons, text="Unlock", command=submit).pack(side="right")
+    dlg.bind("<Return>", submit)
+    dlg.bind("<Escape>", lambda _e: dlg.destroy())
+    _center(dlg)
+    dlg.deiconify()
+    entry.focus_force()
+    dlg.controller = {"var": var, "submit": submit, "msg": msg}
+    return dlg
+
+
+def _guard_idle(win, app, log=print):
+    """Close the window after IDLE_LOCK_SECONDS without input, so an unlocked window left open
+    on a cashier PC does not stay open for anyone who walks up."""
+    last = {"t": time.monotonic()}
+
+    def touch(_e=None):
+        last["t"] = time.monotonic()
+
+    for event in ("<Any-KeyPress>", "<Any-ButtonPress>", "<MouseWheel>", "<Motion>"):
+        win.bind_all(event, touch, add="+")
+
+    def check():
+        if not win.winfo_exists():
+            return
+        if time.monotonic() - last["t"] > IDLE_LOCK_SECONDS:
+            log("[AUTH] Settings and Logs locked after inactivity")
+            win.destroy()
+            return
+        win.after(10_000, check)
+
+    win.after(10_000, check)
+    win.controller["idle_touch"] = touch
+
+
 def _main_window(root, app, on_saved, log_path, get_status):
     """Full-screen window: settings on the left, live log on the right."""
     import tkinter as tk
@@ -302,10 +388,27 @@ def _main_window(root, app, on_saved, log_path, get_status):
 
     win = tk.Toplevel(root)
     win.title("MMG POS Helper")
+    _center(win, 1280, 720)   # where it sits if the user restores it from maximised
     try:
         win.state("zoomed")
     except tk.TclError:
-        win.geometry("1280x720")
+        pass
+
+    # Windows keeps the size but forgets the position when a maximised window is restored,
+    # so put it back in the middle each time it goes from maximised to normal.
+    last_state = {"v": win.state()}
+
+    def on_configure(event):
+        if event.widget is not win:
+            return
+        state = win.state()
+        if last_state["v"] == "zoomed" and state == "normal":
+            last_state["v"] = state
+            _center(win, 1280, 720)
+        else:
+            last_state["v"] = state
+
+    win.bind("<Configure>", on_configure)
     win.columnconfigure(1, weight=1)
     win.rowconfigure(0, weight=1)
 
@@ -317,6 +420,8 @@ def _main_window(root, app, on_saved, log_path, get_status):
     _log_panel(right, log_path)
 
     win.controller = {"settings": left.controller, "log": right.controller}
+    if auth.is_enabled(app._DATA_DIR):
+        _guard_idle(win, app, lambda m: print(f"[{app.get_local_time()}] {m}"))
     win.focus_force()
     return win
 
@@ -511,9 +616,27 @@ def run(app, server):
         notify("Settings saved. Helper restarted.")
         threading.Thread(target=refresh, daemon=True).start()
 
+    gate = auth.Gate(app._DATA_DIR)
+
+    def log(message):
+        print(f"[{app.get_local_time()}] {message}")
+
+    def unlocked(name, action):
+        """Run action(root) now, or after the provider password is accepted when one is set.
+        The prompt is registered under `name`, so clicking again raises it instead of stacking prompts."""
+        def factory(root):
+            if not auth.is_enabled(app._DATA_DIR):
+                return action(root)
+            return _password_prompt(root, gate, lambda: ui.windows.__setitem__(name, action(root)), log)
+        ui.open_once(name, factory)
+
     def open_main(_icon=None, _item=None):
-        ui.open_once("main", lambda root: _main_window(
+        unlocked("main", lambda root: _main_window(
             root, app, on_saved, app.LOG_PATH, lambda: (state["color"], state["text"])))
+
+    def open_folder(_icon=None, _item=None):
+        # The folder holds the e-journal and logs (customer data), so it sits behind the same password.
+        unlocked("folder", lambda root: (open_path(app._DATA_DIR), None)[1])
 
     def open_path(path):
         try:
@@ -539,7 +662,7 @@ def run(app, server):
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Test Print", test_print),
         pystray.MenuItem("Settings and Logs...", open_main, default=True),
-        pystray.MenuItem("Open Journal Folder", lambda *_: open_path(app._DATA_DIR)),
+        pystray.MenuItem("Open Journal Folder", open_folder),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Restart", restart),
         pystray.MenuItem("Quit", quit_),

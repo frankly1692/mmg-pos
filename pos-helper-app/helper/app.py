@@ -895,7 +895,35 @@ async def main():
         await server.serve_forever()
 
 
+def _set_admin_password_from_file(path: str) -> int:
+    """Installer hook: set the provider password from a file, then delete the file.
+    A file (not a command-line argument) so the password never shows up in the process list.
+    Exit codes: 0 ok, 1 could not read the file, 2 password rejected or not saved."""
+    import auth
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            password = f.read().rstrip("\r\n")
+    except OSError as e:
+        print(f"[ERR] Could not read the password file: {e}")
+        return 1
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    try:
+        auth.set_password(_DATA_DIR, password)
+    except Exception as e:
+        print(f"[ERR] Provider password not set: {e}")
+        return 2
+    print(f"[OK] Provider password set ({os.path.join(_DATA_DIR, 'secure', 'admin.json')})")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--set-admin-password-file" in sys.argv:
+        idx = sys.argv.index("--set-admin-password-file")
+        sys.exit(_set_admin_password_from_file(sys.argv[idx + 1]) if idx + 1 < len(sys.argv) else 1)
     print('Printer websocket running...')
     print(f"[{get_local_time()}] [INFO] Ejournal path: {EJOURNAL_PATH}")
     if "--no-tray" in sys.argv:

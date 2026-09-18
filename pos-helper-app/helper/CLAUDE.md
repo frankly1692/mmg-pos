@@ -44,6 +44,7 @@ A standalone Python `asyncio` WebSocket server that bridges the browser to physi
 - `ejournal.txt` (in `C:\MMG-POS`, or `MMG_POS_DATA_DIR`) is the electronic transaction log; never opened more than once per print job
 - **Tray app** — `app.py` runs `HelperServer` (the WebSocket server) on a background thread; `tray.py` owns the main thread (pystray icon with green/yellow/red status, Test Print, one full-screen Settings + live log window). `python app.py --no-tray` runs headless.
 - **Config** — `config.py` reads `C:\MMG-POS\config.json` (MIN, SN, PTU_NO, printer_ip, display_port, display_baudrate, ws_port). Created on first run; a legacy `terminal.json` is migrated. Never stored in the database.
+- **Provider password** — `auth.py`: Settings and Logs is locked by a provider password set at install (scrypt hash in `C:MMG-POSsecuredmin.json`, admin-only folder; `/ADMINPW=` to set or reset), with escalating lockout and a 10-minute idle lock.
 - **Logging** — `logsetup.py` writes everything to `helper.log` (5 MB rotation). Every request is logged as `[REQ #n]` with its payload and `[RES #n]` with status and timing. Payloads contain customer data.
 - **Install** — `build-installer.ps1` builds `installer\Output\MMG-Helper-Setup.exe` (Inno Setup: all-users, wizard + silent switches). The old `install.bat` scripts are gone.
 

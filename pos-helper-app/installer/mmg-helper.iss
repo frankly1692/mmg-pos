@@ -9,6 +9,14 @@
 ;     display_port=COM3
 ; Precedence for each field: command-line switch > branch-defaults.ini > built-in default.
 ; On upgrade, an existing config.json is kept and the settings page is skipped.
+;
+; Provider password (protects the tray's Settings and Logs window):
+;   Fresh install: the wizard asks for it (min 8 characters). Silent install: /ADMINPW="password".
+;   It is stored only as a salted scrypt hash in C:\MMG-POS\secure\admin.json, a folder locked to
+;   administrators (cashiers can read it but cannot change or delete it).
+;   Upgrade: the existing password is kept. To set or reset it, run the installer with /ADMINPW="new".
+;   A silent fresh install without /ADMINPW leaves Settings and Logs unlocked (logged as a warning).
+;   Note: Inno Setup writes the command line to its log, so do not combine /ADMINPW with /LOG.
 
 #define AppName "MMG POS Helper"
 #define AppExe "mmg-helper.exe"
@@ -53,10 +61,25 @@ Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#AppExe}"; Flags: runhidden
 [Code]
 var
   CfgPage: TInputQueryWizardPage;
+  PwPage: TInputQueryWizardPage;
+  PwParam: String;   { /ADMINPW= from the command line, '' if not given }
 
+// These are used while the wizard pages are being decided (ShouldSkipPage), which is BEFORE the
+// app constant exists (it is set after the folder step), so they must not expand it.
+// WizardDirValue is the install folder from the start; DisableDirPage means it never changes.
 function ConfigPath: String;
 begin
-  Result := ExpandConstant('{app}\config.json');
+  Result := AddBackslash(WizardDirValue) + 'config.json';
+end;
+
+function SecureDir: String;
+begin
+  Result := AddBackslash(WizardDirValue) + 'secure';
+end;
+
+function AdminPath: String;
+begin
+  Result := SecureDir + '\admin.json';
 end;
 
 { Value of a "Key": "value" pair in a small flat JSON file; '' if absent. }
@@ -159,12 +182,28 @@ begin
   CfgPage.Values[2] := Pick('PTU', 'PTU_NO', OldCredential('PTU_NO'));
   CfgPage.Values[3] := Pick('PRINTER', 'printer_ip', '192.168.192.168');
   CfgPage.Values[4] := Pick('COM', 'display_port', 'COM3');
+
+  PwParam := ExpandConstant('{param:ADMINPW|}');
+  PwPage := CreateInputQueryPage(CfgPage.ID, 'Provider password',
+    'Protects the Settings and Logs window',
+    'Choose a password that only you (the provider) know. It is asked every time Settings and Logs is opened, ' +
+    'so branch staff cannot change the BIR numbers, printer or read the logs. Minimum 8 characters. ' +
+    'It is stored only as a one-way hash and cannot be recovered: to reset it later, run this installer with /ADMINPW="new password".');
+  PwPage.Add('Provider password:', True);
+  PwPage.Add('Confirm password:', True);
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
+  Result := False;
   { Upgrade: keep the existing config.json untouched. }
-  Result := (PageID = CfgPage.ID) and FileExists(ConfigPath);
+  if PageID = CfgPage.ID then
+    Result := FileExists(ConfigPath);
+  { Skip when the password is given on the command line, one is already set (upgrade), or this is a
+    silent install: silent setup still validates skipped-over pages, so an empty password would abort
+    it instead of installing unlocked with a logged warning. }
+  if PageID = PwPage.ID then
+    Result := WizardSilent or (PwParam <> '') or FileExists(AdminPath);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -172,6 +211,22 @@ var
   I: Integer;
 begin
   Result := True;
+
+  if CurPageID = PwPage.ID then
+  begin
+    if Length(PwPage.Values[0]) < 8 then
+    begin
+      MsgBox('The password must be at least 8 characters.', mbError, MB_OK);
+      Result := False;
+    end
+    else if PwPage.Values[0] <> PwPage.Values[1] then
+    begin
+      MsgBox('The two passwords do not match.', mbError, MB_OK);
+      Result := False;
+    end;
+    Exit;
+  end;
+
   if CurPageID <> CfgPage.ID then Exit;
 
   for I := 0 to 4 do
@@ -273,6 +328,57 @@ begin
   Result := '';
 end;
 
+{ Lock C:\MMG-POS\secure to administrators (cashiers keep read-only access, which the helper needs to
+  check the password). /inheritance:r drops the folder's inherited "Users can modify" entry.
+  Do NOT add /T: it would also strip the inherited entries from admin.json itself and leave it unreadable. }
+procedure LockSecureDir;
+var
+  R: Integer;
+begin
+  ForceDirectories(SecureDir);
+  if not Exec(ExpandConstant('{sys}\icacls.exe'),
+       '"' + SecureDir + '" /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX',
+       '', SW_HIDE, ewWaitUntilTerminated, R) or (R <> 0) then
+  begin
+    Log('WARNING: could not restrict ' + SecureDir + ' (icacls exit ' + IntToStr(R) + ')');
+    SuppressibleMsgBox('Could not restrict access to ' + SecureDir + '. The provider password is stored, but standard users may be able to change it.', mbError, MB_OK, IDOK);
+  end;
+end;
+
+{ Hand the password to the helper exe through a temp file (never the command line, which any user
+  can see in the process list). The exe hashes it with scrypt and deletes the file. }
+procedure ApplyProviderPassword;
+var
+  Pw, Tmp: String;
+  R: Integer;
+begin
+  LockSecureDir;
+
+  if PwParam <> '' then
+    Pw := PwParam
+  else if not FileExists(AdminPath) then
+    Pw := PwPage.Values[0];   { '' when the page was not shown (silent install) }
+
+  if Pw = '' then
+  begin
+    if not FileExists(AdminPath) then
+      Log('WARNING: no provider password was set; Settings and Logs is unlocked. Re-run with /ADMINPW="..." to set one.');
+    Exit;
+  end;
+
+  Tmp := ExpandConstant('{tmp}\mmg-pw.txt');
+  SaveStringsToUTF8File(Tmp, [Pw], False);
+  if not Exec(ExpandConstant('{app}\{#AppExe}'), '--set-admin-password-file "' + Tmp + '"',
+       ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, R) or (R <> 0) then
+  begin
+    Log('ERROR: setting the provider password failed (exit ' + IntToStr(R) + ')');
+    SuppressibleMsgBox('The provider password could not be set (code ' + IntToStr(R) + '). Run this installer again with /ADMINPW="password".', mbError, MB_OK, IDOK);
+  end
+  else
+    Log('Provider password set');
+  DeleteFile(Tmp);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   J: String;
@@ -289,8 +395,12 @@ begin
          '  "ws_port": 9999' + #13#10 +
          '}' + #13#10;
     if not SaveStringToFile(ConfigPath, J, False) then
-      MsgBox('Could not write ' + ConfigPath + '. Copy config.json.example there and edit it.', mbError, MB_OK);
+      SuppressibleMsgBox('Could not write ' + ConfigPath + '. Copy config.json.example there and edit it.', mbError, MB_OK, IDOK);
   end;
+
+  { After config.json exists: the helper exe run by ApplyProviderPassword would otherwise create it. }
+  if CurStep = ssPostInstall then
+    ApplyProviderPassword;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -304,6 +414,7 @@ begin
       DeleteFile(ExpandConstant('{app}\ejournal.txt'));
       DeleteFile(ExpandConstant('{app}\config.json'));
       DeleteFile(ExpandConstant('{app}\terminal.json'));
+      DelTree(ExpandConstant('{app}\secure'), True, True, True);
       RemoveDir(ExpandConstant('{app}'));
     end;
 end;
