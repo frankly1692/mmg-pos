@@ -42,8 +42,10 @@ A standalone Python `asyncio` WebSocket server that bridges the browser to physi
   - Terminal types: `info` — returns `{ MIN, SN, PTU_NO }` for the current workstation
 - All blocking hardware calls use `asyncio.to_thread` to keep the event loop responsive
 - `ReceiptWriter` is a context manager that opens `ejournal.txt` once per transaction and writes to both the file and ESC/POS printer simultaneously — journals to file even when the physical printer is offline
-- `ejournal.txt` is written next to the running executable (resolved via `sys.executable` when frozen by PyInstaller, `__file__` in dev)
-- **BIR terminal credentials** (`MIN`, `SN`, `PTU_NO`) are loaded at startup from `terminal.json` in the same directory as the executable. Not stored in the database — each workstation has its own file. Printed on every receipt and report header.
+- `ejournal.txt`, `config.json` and `helper.log` live in `C:\MMG-POS` (override with the `MMG_POS_DATA_DIR` env var), so every launch method resolves to the same files
+- **Per-workstation config** (`config.json`, loaded by `helper/config.py`): BIR credentials (`MIN`, `SN`, `PTU_NO`), `printer_ip`, `display_port`, `display_baudrate`, `ws_port`. Created with defaults on first run; a legacy `terminal.json` is migrated. Not stored in the database — each workstation has its own file. BIR values are printed on every receipt and report header.
+- **Tray app**: `helper/tray.py` owns the main thread (status icon, Test Print, one full-screen Settings + live log window); the WebSocket server runs on a background thread (`HelperServer`). `python app.py --no-tray` runs headless.
+- **Logging**: `helper.log` records every request (`[REQ #n]` with payload) and response (`[RES #n]` with status/timing), printer online/offline changes, and errors. Payloads contain customer data.
 
 ### mmg-app — `src/`
 
@@ -229,31 +231,27 @@ Same codebase as internal, deployed as a second instance with `VITE_APP_ENV=stag
 
 ### Cashier Workstation Deployment (pos-helper-app)
 
-pos-helper-app is distributed as a single Windows executable built with PyInstaller. Each cashier PC needs it for receipt printing and VFD display.
+pos-helper-app is distributed as a single Windows installer, `MMG-Helper-Setup.exe`, built by `pos-helper-app/build-installer.ps1` (PyInstaller exe wrapped by Inno Setup; Inno Setup is needed on the build machine only). Each cashier PC needs it for receipt printing and VFD display.
 
-**Files distributed per workstation:**
-```
-mmg-helper.exe      ← built from pos-helper-app/helper/mmg-helper.spec
-install.bat         ← one-time installer (pos-helper-app/install.bat)
-```
+**What the installer does** (administrator, all users):
+1. Installs `mmg-helper.exe` to `C:\MMG-POS\` (writable by standard users)
+2. Wizard asks for BIR credentials (MIN, SN, PTU No), printer IP and display COM port, and writes `C:\MMG-POS\config.json`. Silent installs take `/MIN= /SN= /PTU= /PRINTER= /COM=`; a `branch-defaults.ini` next to the installer prefills shared fields
+3. Creates a common Startup shortcut — helper starts for every user at login
+4. Removes the old install: stops a running old helper (including the Python variant), deletes its `C:\MMG-POS\helper` folder and the old per-user startup shortcuts, and prefills the wizard from an old `terminal.json`
+5. Upgrades keep `config.json` and `ejournal.txt`; uninstall (Add/Remove Programs) asks before deleting them
 
-**What `install.bat` does:**
-1. Copies `mmg-helper.exe` → `C:\MMG-POS\`
-2. Prompts for BIR terminal credentials (MIN, SN, PTU No) and writes `C:\MMG-POS\terminal.json`
-3. Creates a Windows Startup shortcut — helper auto-starts on every login
-4. Launches the helper immediately
-
-**BIR terminal credentials** are per-workstation, stored only in `C:\MMG-POS\terminal.json`. They are never stored in MongoDB. Edit the file and restart the helper to update credentials after BIR approval.
+**BIR terminal credentials** are per-workstation, stored only in `C:\MMG-POS\config.json`. They are never stored in MongoDB. Update them from the tray icon's Settings form (or edit the file and choose Restart) after BIR approval.
 
 ```json
-{ "MIN": "123-456789-0", "SN": "S/N0000012345", "PTU_NO": "PTU-000000000001" }
+{ "MIN": "123-456789-0", "SN": "S/N0000012345", "PTU_NO": "PTU-000000000001",
+  "printer_ip": "192.168.192.168", "display_port": "COM3", "display_baudrate": 9600, "ws_port": 9999 }
 ```
 
 **Receipt fields and their source:**
 
 | Field | Source |
 |---|---|
-| MIN, SN, PTU No (header) | `terminal.json` on workstation |
+| MIN, SN, PTU No (header) | `config.json` on workstation |
 | Accred No, Supplier PTU (footer) | `dvoteDetails` from DB |
 
 ---
@@ -331,12 +329,11 @@ python test_refactor.py
 
 ### pos-helper-app (build Windows executable for cashier workstations)
 ```bash
-cd pos-helper-app/helper
-pip install pyinstaller
-pyinstaller mmg-helper.spec     # output: dist/mmg-helper.exe
+cd pos-helper-app
+.\build-installer.ps1           # PyInstaller exe + Inno Setup -> installer\Output\MMG-Helper-Setup.exe
 
-# Then distribute: copy dist/mmg-helper.exe + pos-helper-app/install.bat to USB / network share
-# Run install.bat once on each cashier workstation
+# Then distribute MMG-Helper-Setup.exe (and optional branch-defaults.ini) to USB / network share
+# Run it once on each cashier workstation
 ```
 
 ---

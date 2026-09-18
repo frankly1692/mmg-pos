@@ -1,0 +1,9 @@
+{
+  "MIN": "123-456789-0",
+  "SN": "S/N0000012345",
+  "PTU_NO": "PTU-000000000001",
+  "printer_ip": "192.168.192.168",
+  "display_port": "COM3",
+  "display_baudrate": 9600,
+  "ws_port": 9999
+}

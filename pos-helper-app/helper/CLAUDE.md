@@ -41,7 +41,11 @@ A standalone Python `asyncio` WebSocket server that bridges the browser to physi
 - Display device types: `message`, `item`, `total`, `next`
 - All blocking hardware calls are offloaded with `asyncio.to_thread` to keep the event loop responsive
 - `ReceiptWriter` is a context manager that opens `ejournal.txt` once per transaction and writes to both the file and the ESC/POS printer simultaneously — journals to file even when the physical printer is offline
-- `ejournal.txt` (in `helper/`) is the electronic transaction log; never opened more than once per print job
+- `ejournal.txt` (in `C:\MMG-POS`, or `MMG_POS_DATA_DIR`) is the electronic transaction log; never opened more than once per print job
+- **Tray app** — `app.py` runs `HelperServer` (the WebSocket server) on a background thread; `tray.py` owns the main thread (pystray icon with green/yellow/red status, Test Print, one full-screen Settings + live log window). `python app.py --no-tray` runs headless.
+- **Config** — `config.py` reads `C:\MMG-POS\config.json` (MIN, SN, PTU_NO, printer_ip, display_port, display_baudrate, ws_port). Created on first run; a legacy `terminal.json` is migrated. Never stored in the database.
+- **Logging** — `logsetup.py` writes everything to `helper.log` (5 MB rotation). Every request is logged as `[REQ #n]` with its payload and `[RES #n]` with status and timing. Payloads contain customer data.
+- **Install** — `build-installer.ps1` builds `installer\Output\MMG-Helper-Setup.exe` (Inno Setup: all-users, wizard + silent switches). The old `install.bat` scripts are gone.
 
 ### mmg-app — `../../mmg-app/src/`
 
@@ -164,9 +168,9 @@ docker-compose up --build
 
 ## Hardware
 
-- **Receipt Printer**: Epson TM-series ESC/POS, connected via TCP/IP. IP address is configurable per `settings.url` in the WebSocket message payload (default: `192.168.192.168`).
-- **VFD Customer Display**: Serial RS-232, hardcoded to `COM3` on Windows (`/dev/ttyACM1` on Linux). Uses `\x0C` (form feed) to clear the 2×20 character display.
-- Printer failure is non-fatal — the `ReceiptWriter` context manager catches errors and still completes the journal write; the response includes `"message": "Journaled successfully (printer unavailable)"`.
+- **Receipt Printer**: Epson TM-series ESC/POS, connected via TCP/IP. IP comes from `settings.url` in the WebSocket message if sent (the printer test does), otherwise `printer_ip` in `config.json` (default `192.168.192.168`).
+- **VFD Customer Display**: Serial RS-232, `display_port` in `config.json` (default `COM3`; `/dev/ttyACM1` on Linux). Uses `\x0C` (form feed) to clear the 2×20 character display.
+- Printer failure is non-fatal — python-escpos connects lazily, so `ReceiptWriter` records the first printer error, stops using the printer, and still completes the journal write; the response includes `"message": "Journaled successfully (printer unavailable)"`.
 
 
 https://support.clickpos.com/hc/en-us/articles/205723945-Web-POS-Epson-TM-Series-Intelligent-Printer-Setup-Slave-Ethernet

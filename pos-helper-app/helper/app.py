@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import traceback
+import itertools
 from itertools import groupby
 import json
 import numbers
@@ -15,48 +16,35 @@ from websockets.asyncio.server import serve
 import escpos.exceptions
 from escpos.printer import Usb, Network
 
-# Next to the .exe when frozen, or next to app.py in dev — used as a fallback only.
-_BASE_DIR = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
+import threading
+import config as helper_config
+import logsetup
 
-
-def _resolve_data_dir() -> str:
-    # Pin ejournal.txt (and terminal.json) to one well-known, documented location
-    # (C:\MMG-POS, per install.bat) instead of "next to wherever this process
-    # happened to be launched from". Different launch methods (dev run from a
-    # random cwd, double-clicked exe, a stray leftover process, a reinstall to a
-    # different folder) previously each resolved to a different file, so the
-    # journal appeared to "go missing" depending on which copy answered a request.
-    fixed_dir = os.environ.get("MMG_POS_DATA_DIR", r"C:\MMG-POS")
-    try:
-        os.makedirs(fixed_dir, exist_ok=True)
-        return fixed_dir
-    except Exception as e:
-        print(f"[WARN] Could not use {fixed_dir} ({e}), falling back to {_BASE_DIR}")
-        return _BASE_DIR
-
-
-_DATA_DIR = _resolve_data_dir()
+_DATA_DIR = helper_config.resolve_data_dir()
+LOG_PATH = logsetup.setup(_DATA_DIR)
 EJOURNAL_PATH = os.path.join(_DATA_DIR, "ejournal.txt")
 
-# BIR terminal credentials — stored in terminal.json on each workstation
-_TERMINAL_CONFIG_PATH = os.path.join(_DATA_DIR, "terminal.json")
+# Per-workstation settings (BIR credentials, printer IP, display port, WS port)
+CONFIG, CONFIG_WARNINGS = helper_config.load(_DATA_DIR)
+TERMINAL_MIN    = CONFIG["MIN"]
+TERMINAL_SN     = CONFIG["SN"]
+TERMINAL_PTU_NO = CONFIG["PTU_NO"]
 
-def _load_terminal_config() -> dict:
-    if os.path.exists(_TERMINAL_CONFIG_PATH):
-        try:
-            with open(_TERMINAL_CONFIG_PATH, "r", encoding="utf-8") as f:
-                import json as _json
-                return _json.load(f)
-        except Exception as e:
-            print(f"Warning: could not read terminal.json: {e}")
-    return {}
+print(f"Config loaded from {_DATA_DIR} — MIN: {TERMINAL_MIN}, SN: {TERMINAL_SN}, PTU: {TERMINAL_PTU_NO}")
+print(f"Printer: {CONFIG['printer_ip']}  Display: {CONFIG['display_port']}  WS port: {CONFIG['ws_port']}")
+for _w in CONFIG_WARNINGS:
+    print(f"[CONFIG WARN] {_w}")
 
-TERMINAL = _load_terminal_config()
-TERMINAL_MIN    = TERMINAL.get("MIN",    "---")
-TERMINAL_SN     = TERMINAL.get("SN",     "---")
-TERMINAL_PTU_NO = TERMINAL.get("PTU_NO", "---")
 
-print(f"Terminal config loaded — MIN: {TERMINAL_MIN}, SN: {TERMINAL_SN}, PTU: {TERMINAL_PTU_NO}")
+def reload_config():
+    """Re-read config.json in place so running code picks up edits without a new process."""
+    global CONFIG_WARNINGS, TERMINAL_MIN, TERMINAL_SN, TERMINAL_PTU_NO
+    new_cfg, CONFIG_WARNINGS = helper_config.load(_DATA_DIR)
+    CONFIG.clear()
+    CONFIG.update(new_cfg)
+    TERMINAL_MIN, TERMINAL_SN, TERMINAL_PTU_NO = CONFIG["MIN"], CONFIG["SN"], CONFIG["PTU_NO"]
+    for w in CONFIG_WARNINGS:
+        print(f"[CONFIG WARN] {w}")
 
 # Debouncing state
 last_processed_transaction = {
@@ -86,7 +74,7 @@ def get_printer_device(setting: dict = {}):
         # Handle case where setting is not a dict (e.g., string "network")
         if not isinstance(setting, dict):
             setting = {}
-        url = setting.get('url', '192.168.192.168')
+        url = setting.get('url') or CONFIG['printer_ip']
         print(f"Attempting printer connection to: {url}")
         p = Network(url)
         if p is None:
@@ -97,7 +85,7 @@ def get_printer_device(setting: dict = {}):
     return p, error
 
 def get_display_device():
-    return serial.Serial(port='COM3', baudrate=9600)
+    return serial.Serial(port=CONFIG['display_port'], baudrate=CONFIG['display_baudrate'])
 
 class ReceiptWriter:
     def __init__(self, settings: dict, journal: bool = True):
@@ -127,14 +115,23 @@ class ReceiptWriter:
                 self.printer.cut()
                 self.printer.close()
             except Exception as e:
-                print(f"Error closing printer: {e}")
+                self._printer_failed("close", e)
+
+    def _printer_failed(self, op: str, e: Exception):
+        """python-escpos connects lazily, so an offline printer only fails on first use.
+        Record it in self.error (callers report 'printer unavailable' from that) and stop
+        touching the printer: each further call would otherwise wait out its own timeout."""
+        print(f"[{get_local_time()}] [ERR] Printer {op} error: {e}")
+        if not self.error:
+            self.error = str(e).strip() or f"{type(e).__name__} during {op}"
+        self.printer = None
 
     def set(self, **kwargs):
         if self.printer:
             try:
                 self.printer.set(**kwargs)
             except Exception as e:
-                print(f"Printer set error: {e}")
+                self._printer_failed("set", e)
 
     def write(self, text: str):
         if text is None: return
@@ -152,7 +149,7 @@ class ReceiptWriter:
             try:
                 self.printer.text(text)
             except Exception as e:
-                print(f"Printer write error: {e}")
+                self._printer_failed("write", e)
 
     def writeln(self, text: str = ""):
         self.write(text)
@@ -654,6 +651,15 @@ def display_next():
     return { 'message': 'Displayed successfully' }
 
 
+_req_ids = itertools.count(1)
+
+
+def _preview(message, limit=4000):
+    """Request text for the log, truncated so one huge receipt can't flood helper.log."""
+    text = message if isinstance(message, str) else repr(message)
+    return text if len(text) <= limit else text[:limit] + f"... [{len(text) - limit} more chars]"
+
+
 async def handler(websocket):
     client_address = websocket.remote_address
     display_welcome()
@@ -661,12 +667,14 @@ async def handler(websocket):
 
     try:
         async for message in websocket:
+            req_id = next(_req_ids)
+            started = time.monotonic()
             try:
                 data = json.loads(message)
                 device = data.get("device")
                 dtype = data.get("device_type")
 
-                print(f"[{get_local_time()}] [REQ] Request received: device={device}, type={dtype}, params={data}")
+                print(f"[{get_local_time()}] [REQ #{req_id}] {device}/{dtype} from {client_address} ({len(message)} bytes) payload={_preview(message)}")
 
                 ret = {}
                 if device == "terminal" and dtype == "info":
@@ -691,12 +699,13 @@ async def handler(websocket):
                 if(ret == {}):
                     raise Exception(f"Unrecognized device/device_type combination: device={device!r}, device_type={dtype!r}")
 
-                if "error" not in ret:
-                    print(f"[{get_local_time()}] [OK] Success: {device}/{dtype}")
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                status = "OK" if "error" not in ret else "FAILED"
+                print(f"[{get_local_time()}] [RES #{req_id}] {device}/{dtype} {status} {elapsed_ms}ms response={_preview(json.dumps(ret), 1000)}")
 
                 await websocket.send(json.dumps(ret))
             except json.JSONDecodeError as e:
-                print(f"[{get_local_time()}] [ERR] JSON parse error: {e}")
+                print(f"[{get_local_time()}] [ERR #{req_id}] JSON parse error: {e} | raw={_preview(message, 500)}")
                 try:
                     await websocket.send(json.dumps({'error': 'Invalid JSON format'}))
                 except:
@@ -705,13 +714,13 @@ async def handler(websocket):
                 device = data.get("device", "unknown") if 'data' in locals() else "unknown"
                 dtype = data.get("device_type", "unknown") if 'data' in locals() else "unknown"
                 error_detail = f"{type(e).__name__}: {e}"
-                print(f"[{get_local_time()}] [ERR] Error: {device}/{dtype} - {error_detail}")
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                print(f"[{get_local_time()}] [ERR #{req_id}] {device}/{dtype} raised after {elapsed_ms}ms - {error_detail} | payload={_preview(message)}")
                 print(traceback.format_exc())
                 try:
                     await websocket.send(json.dumps({'error': error_detail}))
                 except:
                     pass
-                return None
     except Exception as e:
         print(f"[{get_local_time()}] [DISC] Connection error from {client_address}: {e}")
     finally:
@@ -720,27 +729,27 @@ async def handler(websocket):
 def kill_existing_process(port=9999):
     import subprocess
     import platform
+    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         if platform.system() == "Windows":
             # Find process on port
-            result = subprocess.run(f'netstat -ano | findstr LISTENING', shell=True, capture_output=True, text=True)
+            result = subprocess.run('netstat -ano | findstr LISTENING', shell=True, capture_output=True, text=True, creationflags=no_window)
             pids_to_kill = []
 
             if result.stdout:
                 for line in result.stdout.split('\n'):
-                    if f':{port}' in line and 'LISTENING' in line:
-                        # Extract PID from last column
-                        parts = line.split()
-                        if parts:
-                            pid = parts[-1]
-                            if pid.isdigit():
-                                pids_to_kill.append(pid)
+                    parts = line.split()
+                    # Local address is column 2; match the port exactly (not :19999 etc.)
+                    if len(parts) >= 5 and parts[1].endswith(f':{port}'):
+                        pid = parts[-1]
+                        if pid.isdigit() and int(pid) != os.getpid():
+                            pids_to_kill.append(pid)
 
             if pids_to_kill:
                 for pid in pids_to_kill:
                     try:
                         print(f"[{get_local_time()}] [INFO] Killing existing process on port {port} (PID: {pid})")
-                        subprocess.run(f'taskkill /PID {pid} /F', shell=True, capture_output=True, text=True)
+                        subprocess.run(f'taskkill /PID {pid} /F', shell=True, capture_output=True, text=True, creationflags=no_window)
                         time.sleep(0.5)
                     except Exception as e:
                         print(f"[{get_local_time()}] [WARN] Failed to kill PID {pid}: {e}")
@@ -760,14 +769,79 @@ def kill_existing_process(port=9999):
     except Exception as e:
         print(f"[{get_local_time()}] [WARN] Could not kill existing process: {e}")
 
+class HelperServer:
+    """The WebSocket server, runnable on a background thread so the tray can own the main thread."""
+
+    def __init__(self):
+        self.thread = None
+        self.loop = None
+        self._stop = None
+        self.state = "stopped"   # stopped | starting | running | error
+        self.error = None
+        self.port = None
+
+    def start(self):
+        if self.thread and self.thread.is_alive():
+            return
+        self.state, self.error = "starting", None
+        self.thread = threading.Thread(target=self._run, name="ws-server", daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        try:
+            asyncio.run(self._serve())
+        except Exception as e:
+            self.state, self.error = "error", f"{type(e).__name__}: {e}"
+            print(f"[{get_local_time()}] [ERR] WebSocket server failed: {self.error}")
+            print(traceback.format_exc())
+
+    async def _serve(self):
+        self.loop = asyncio.get_running_loop()
+        self._stop = asyncio.Event()
+        port = CONFIG["ws_port"]
+        kill_existing_process(port)
+        async with serve(handler, "127.0.0.1", port):
+            self.port, self.state = port, "running"
+            print(f"[{get_local_time()}] [OK] WebSocket server listening on ws://127.0.0.1:{port}")
+            await self._stop.wait()
+        self.state = "stopped"
+
+    def stop(self, timeout=5):
+        if self.loop and self._stop and self.thread and self.thread.is_alive():
+            self.loop.call_soon_threadsafe(self._stop.set)
+            self.thread.join(timeout)
+
+    def restart(self):
+        self.stop()
+        self.start()
+
+
+def apply_config(server: "HelperServer"):
+    """Reload config.json and restart the server (e.g. the WS port may have changed)."""
+    reload_config()
+    server.restart()
+
+
 async def main():
-    kill_existing_process(9999)
-    async with serve(handler, "127.0.0.1", 9999) as server:
-        print(f"[{get_local_time()}] [OK] WebSocket server listening on ws://127.0.0.1:9999")
+    """Headless mode (--no-tray): run the server on the main thread."""
+    port = CONFIG["ws_port"]
+    kill_existing_process(port)
+    async with serve(handler, "127.0.0.1", port) as server:
+        print(f"[{get_local_time()}] [OK] WebSocket server listening on ws://127.0.0.1:{port}")
         await server.serve_forever()
 
 
 if __name__ == "__main__":
     print('Printer websocket running...')
     print(f"[{get_local_time()}] [INFO] Ejournal path: {EJOURNAL_PATH}")
-    asyncio.run(main())
+    if "--no-tray" in sys.argv:
+        asyncio.run(main())
+    else:
+        try:
+            import tray
+        except Exception as e:
+            print(f"[{get_local_time()}] [WARN] Tray unavailable ({e}); running headless")
+            asyncio.run(main())
+        else:
+            # Pass this module (not `import app`) so the tray shares our globals instead of re-importing.
+            tray.run(sys.modules[__name__], HelperServer())

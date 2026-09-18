@@ -1,308 +1,101 @@
-# pos-helper-app Setup & Installation Guide
+# pos-helper-app Setup
 
-This guide covers installing and running the MMG POS Helper application on your workstation.
+Developer setup and troubleshooting. For what the helper does, its config and the installer, see [README.md](README.md).
 
-## Quick Start
-
-### For Existing Setups (Cleanup & Reinstall)
-
-If you already have an old installation or virtual environment, follow these steps to clean up and reinstall:
+## Development setup
 
 ```bash
 cd pos-helper-app
 
-# 1. Remove old virtual environment (if it exists)
-rmdir /s /q .venv
-
-# 2. Create fresh virtual environment
+# Fresh virtual environment (delete .venv first if you have an old one)
 python -m venv .venv
+.venv\Scripts\activate                  # PowerShell: .venv\Scripts\Activate.ps1 · Git Bash: source .venv/Scripts/activate
 
-# 3. Activate virtual environment
-.venv\Scripts\activate
-
-# 4. Install dependencies
 pip install --upgrade pip
 pip install -r helper/requirements.txt
 
-# 5. Test the installation
 cd helper
-python -c "import app; print('✓ Setup successful!')"
-cd ..
+python app.py                           # tray icon + WebSocket server
+python app.py --no-tray                 # headless, output on the console
+```
 
-# 6. Run the helper
-cd helper
+Expected startup output (also written to `helper.log`):
+
+```
+Config loaded from C:\MMG-POS — MIN: ---, SN: ---, PTU: ---
+Printer: 192.168.192.168  Display: COM3  WS port: 9999
+[CONFIG WARN] MIN is not set (receipts will show a placeholder)
+...
+[OK] WebSocket server listening on ws://127.0.0.1:9999
+```
+
+To keep development data out of `C:\MMG-POS`, point the helper at another folder:
+
+```powershell
+$env:MMG_POS_DATA_DIR = "$env:TEMP\mmg-dev"
 python app.py
 ```
 
----
+Starting the helper takes over port 9999: it stops whatever is already listening there (including an installed helper on the same PC).
 
-## Installation Steps (Detailed)
+## Build the workstation installer
 
-### Step 1: Clean Up Old Installation
-
-If you have an existing `.venv` or old Python environment:
-
-```bash
+```powershell
+# Once: Inno Setup 6 (https://jrsoftware.org/isdl.php) or `choco install innosetup -y` in an administrator terminal
 cd pos-helper-app
-
-# Remove old virtual environment
-rmdir /s /q .venv
-
-# Optional: Remove old Python cache
-rmdir /s /q __pycache__
-rmdir /s /q helper/__pycache__
+.\build-installer.ps1
 ```
 
-### Step 2: Create Virtual Environment
+This runs `pyinstaller mmg-helper.spec` (in `helper/`) and compiles `installer\mmg-helper.iss` to `installer\Output\MMG-Helper-Setup.exe`. Cashier PCs need only that file — no Python, no Inno Setup.
 
-```bash
-# From pos-helper-app directory
-python -m venv .venv
-```
+When adding a dependency, add it to `helper/requirements.txt` and to `hiddenimports` in `helper/mmg-helper.spec`.
 
-This creates an isolated Python environment for this project.
-
-### Step 3: Activate Virtual Environment
-
-**Windows (Command Prompt):**
-```bash
-.venv\Scripts\activate
-```
-
-**Windows (PowerShell):**
-```bash
-.venv\Scripts\Activate.ps1
-```
-
-**Windows (Git Bash):**
-```bash
-source .venv/Scripts/activate
-```
-
-You should see `(.venv)` prefix in your terminal prompt.
-
-### Step 4: Install Dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r helper/requirements.txt
-```
-
-This installs all required packages:
-- `websockets` — WebSocket server for browser communication
-- `python-escpos` — Receipt printer control (ESC/POS)
-- `pyserial` — Serial communication for VFD display
-- `pytz` — Timezone handling
-- And supporting libraries (Pillow, qrcode, barcode, etc.)
-
-### Step 5: Verify Installation
-
-```bash
-cd helper
-python -c "import app; print('✓ All dependencies loaded successfully')"
-```
-
-Expected output:
-```
-Terminal config loaded — MIN: ---, SN: ---, PTU: ---
-✓ All dependencies loaded successfully
-```
-
----
-
-## Running the Helper
-
-### Development Mode
-
-```bash
-cd pos-helper-app/helper
-python app.py
-```
-
-Output should show:
-```
-Terminal config loaded — MIN: ---, SN: ---, PTU: ---
-...server listening on ws://localhost:9999
-```
-
-The WebSocket server is now listening and ready for connections from the browser.
-
-### Production Mode (Windows Executable)
-
-For deploying to cashier workstations, build a standalone `.exe`:
-
-```bash
-cd pos-helper-app/helper
-
-# Install PyInstaller
-pip install pyinstaller
-
-# Build executable
-pyinstaller mmg-helper.spec
-
-# Output: dist/mmg-helper.exe
-```
-
-Then use `install.bat` to deploy to workstations:
-
-```bash
-# Copy these files to workstations (USB or network share):
-#   - dist/mmg-helper.exe
-#   - ../install.bat
-
-# On workstation, run:
-install.bat
-```
-
-The installer will:
-1. Create `C:\MMG-POS\` directory
-2. Prompt for BIR terminal credentials (MIN, SN, PTU No)
-3. Save credentials to `C:\MMG-POS\terminal.json`
-4. Create Windows Startup shortcut for auto-start on login
-5. Launch the helper immediately
-
----
-
-## Troubleshooting
-
-### Issue: "python: command not found"
-
-**Solution:** Install Python 3.10+ from https://www.python.org/downloads/
-
-Make sure to check **"Add Python to PATH"** during installation.
-
-### Issue: "No module named 'websockets'" or other import errors
-
-**Solution:** Ensure virtual environment is activated and dependencies installed:
-
-```bash
-.venv\Scripts\activate
-pip install -r helper/requirements.txt
-```
-
-### Issue: "Permission denied" when creating `.venv`
-
-**Solution:** Run Command Prompt or PowerShell as Administrator.
-
-### Issue: Printer not found / Connection timeout
-
-The helper will still work and journal to file. Check:
-1. Printer IP address (default: `192.168.192.168`)
-2. Printer is powered on and connected to network
-3. Network connectivity between workstation and printer
-
-Output will show: `"Journaled successfully (printer unavailable)"`
-
-### Issue: VFD Display not responding
-
-Serial display requires:
-- Cable connected to `COM3` (Windows) or `/dev/ttyACM1` (Linux)
-- Correct baudrate: 9600
-- Verify COM port in Device Manager
-
-Display is optional — receipts will still print.
-
-### Issue: "ModuleNotFoundError" during PyInstaller build
-
-**Solution:** Ensure all imports in `app.py` match `mmg-helper.spec` hidden imports.
-
-Update `mmg-helper.spec` if adding new packages:
-
-```python
-hiddenimports=[
-    'websockets',
-    'escpos',
-    'serial',
-    # ... add new modules here
-]
-```
-
----
-
-## Files & Directories
+## Files
 
 ```
 pos-helper-app/
-├── .venv/                    # Virtual environment (created after pip install)
 ├── helper/
-│   ├── app.py               # Main WebSocket server
-│   ├── requirements.txt      # Python dependencies
-│   ├── mmg-helper.spec       # PyInstaller configuration
-│   ├── ejournal.txt          # Electronic receipt journal (auto-created)
-│   └── terminal.json         # BIR credentials (auto-created)
-├── install.bat               # Workstation installer script
-└── SETUP.md                  # This file
+│   ├── app.py               # WebSocket server, printing, display, e-journal
+│   ├── tray.py              # Tray icon, Settings + Logs window
+│   ├── config.py            # config.json load / validate / save
+│   ├── logsetup.py          # print() -> helper.log
+│   ├── requirements.txt
+│   └── mmg-helper.spec      # PyInstaller (windowed: console=False)
+├── installer/
+│   └── mmg-helper.iss       # Inno Setup script
+├── build-installer.ps1      # Builds exe + installer
+├── config.json.example      # Template for C:\MMG-POS\config.json
+├── test_printer.py / .ps1   # Manual printer checks
+└── test_websocket.py        # Manual WebSocket check
 ```
 
-### Key Files Explained
+## Troubleshooting
 
-**requirements.txt** — Lists all Python packages needed. Never edit manually; use `pip freeze > requirements.txt` if updating.
+Start with the tray icon (colour and tooltip) and **Settings and Logs...** (log panel on the right). The log shows every request and why it failed.
 
-**mmg-helper.spec** — PyInstaller build configuration. Update `hiddenimports` when adding new dependencies.
+### Yellow icon: "Printer ... unreachable"
+The helper still journals receipts. Check the printer is on, on the network, and that `printer_ip` in Settings is right. The check connects to TCP port 9100.
 
-**ejournal.txt** — Append-only log of every receipt printed. One line per transaction. Created automatically.
+### Yellow icon: "BIR not set"
+`MIN`, `SN` or `PTU_NO` in `config.json` are still placeholders. Open **Settings and Logs...** and enter the values BIR issued for this terminal.
 
-**terminal.json** — BIR terminal credentials (MIN, SN, PTU No). Created by installer or manually.
+### Red icon
+The WebSocket server is not running. The tooltip and log give the reason — usually the port is held by another program, or `config.json` has an invalid `ws_port`.
 
----
+### Browser cannot connect / nothing prints
+The frontend connects to `ws://localhost:9999` (`mmg-app/src/providers/PrinterProvider.jsx`). Check the helper is running and `ws_port` is 9999.
 
-## Common Commands
+### Test print says "Printer unavailable"
+The printer did not accept a connection. The error text in the response and log names the address. A receipt in the same situation is journaled and reports "Journaled successfully (printer unavailable)".
 
-```bash
-# Activate virtual environment
-.venv\Scripts\activate
+### VFD display not responding
+Check the cable, that `display_port` matches the port in Device Manager, and baudrate 9600. The display is optional; receipts still print.
 
-# Run WebSocket server
-cd helper && python app.py
+### `config.json` problems
+A malformed or unreadable file makes the helper use defaults and log the reason. Fix the JSON, or delete the file to regenerate it (an old `terminal.json` is migrated if present).
 
-# Run tests
-python test_fix.py
-python test_async.py
-python test_journaling.py
+### `python: command not found` / `No module named ...` (development)
+Install Python 3.10+ with "Add Python to PATH", activate `.venv`, and run `pip install -r helper/requirements.txt`.
 
-# Update dependencies (after adding new packages)
-pip freeze > helper/requirements.txt
-
-# Deactivate virtual environment
-deactivate
-```
-
----
-
-## Architecture
-
-```
-Browser (mmg-app)
-    │
-    └──[WebSocket ws://localhost:9999]──► pos-helper-app (this server)
-                                             ├── Receipt Printer (TCP/IP 192.168.192.168)
-                                             └── VFD Display (Serial COM3)
-```
-
-The helper bridges the browser to physical hardware:
-- **Receipt Printer:** ESC/POS over TCP/IP (configurable IP)
-- **VFD Display:** RS-232 serial (hardcoded to COM3)
-- **Electronic Journal:** Append-only file `ejournal.txt`
-
----
-
-## Next Steps
-
-1. **Development:** Run `python helper/app.py` and test in browser
-2. **Testing:** Run test scripts to verify hardware interfaces
-3. **Deployment:** Build `mmg-helper.exe` and use `install.bat` for workstations
-4. **Operations:** Monitor `ejournal.txt` for transaction records
-
----
-
-## Support
-
-For issues or questions:
-1. Check **Troubleshooting** section above
-2. Review `ejournal.txt` for error messages
-3. Check hardware connections (printer IP, serial cable)
-4. Verify BIR terminal credentials in `terminal.json`
-
----
-
-*Last updated: 2026-07-26*
+### `ModuleNotFoundError` in the built exe
+Add the module to `hiddenimports` in `helper/mmg-helper.spec` and rebuild.

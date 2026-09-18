@@ -9,3 +9,6 @@ build/
 .DS_Store
 ejournal.txt
 terminal.json
+helper.log
+helper.log.1
+installer/Output/

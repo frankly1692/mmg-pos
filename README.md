@@ -315,9 +315,12 @@ mmg-pos/
 ├── pos-helper-app/         ← Hardware bridge (WebSocket)
 │   ├── helper/
 │   │   ├── app.py          ← WebSocket server
+│   │   ├── tray.py         ← Tray icon, Settings form, log viewer
+│   │   ├── config.py       ← config.json loader
 │   │   ├── requirements.txt
 │   │   └── mmg-helper.spec ← PyInstaller config (for .exe build)
-│   └── install.bat         ← Windows installer for cashier workstations
+│   ├── installer/          ← Inno Setup script for cashier workstations
+│   └── build-installer.ps1 ← Builds MMG-Helper-Setup.exe
 │
 ├── docker-compose.yml      ← All services (local dev)
 ├── CLAUDE.md               ← Architecture & detailed docs
