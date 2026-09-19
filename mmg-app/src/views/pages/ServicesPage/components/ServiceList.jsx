@@ -81,7 +81,7 @@ const ProductList = ({ mode }) => {
         const service = services.find((p) => p._id === id);
         if (service) {
             // Extract the category id
-            const categoryId = service.category.id;
+            const categoryId = service.category?.id;
 
             // Create a new object with the category id instead of the entire category object
             const serviceWithCategoryId = {
@@ -261,7 +261,7 @@ const ProductList = ({ mode }) => {
                                 <TableRow key={product._id}>
                                     <TableCell>{product.name}</TableCell>
                                     <TableCell>
-                                        <Chip label={product.category.name} size="small" variant="outlined" color="secondary" />
+                                        <Chip label={product?.category?.name} size="small" variant="outlined" color="secondary" />
                                     </TableCell>
                                     <TableCell dangerouslySetInnerHTML={{ __html: product.description }} />
                                     <TableCell>

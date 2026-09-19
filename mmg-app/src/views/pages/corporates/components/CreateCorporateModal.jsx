@@ -22,7 +22,8 @@ const validationSchema = Yup.object().shape({
         .required(),
     city: Yup.string().required(),
     postalCode: Yup.string().required(),
-    state: Yup.string().required()
+    state: Yup.string().required(),
+    emailAddress: Yup.string().email('Invalid email address')
 });
 
 export default function () {
@@ -119,7 +120,7 @@ export default function () {
                                     <Grid item xs={9}>
                                         <Stack spacing={2}>
                                             <TextField name="contactNo" placeholder="Phone" />
-                                            <TextField name="emailAddress" placeholder="Email" />
+                                            <TextField name="emailAddress" placeholder="Email" helperText />
                                         </Stack>
                                     </Grid>
                                 </Grid>

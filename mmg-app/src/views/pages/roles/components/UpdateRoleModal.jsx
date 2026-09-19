@@ -164,7 +164,7 @@ export default function ({ initialValues }) {
             <Dialog open={open} maxWidth="md" onClose={handleClose}>
                 <Formik
                     initialValues={{
-                        name: initialValues?.data?.name || '',
+                        name: initialValues?.name || '',
                         permissions
                     }}
                     onSubmit={(values, actions) => {

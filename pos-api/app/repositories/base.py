@@ -102,17 +102,11 @@ class BackupRepository(Repository):
             self._backup_db_client = current_backup_database._connection
 
     def insert_one(self, data):
-        with self._db_client.start_session() as session:
-            with session.start_transaction():
-                try:
-                    self.backup_one(data)
-                    result = self._db[self._collection].insert_one(data)
-                    session.commit_transaction()
-                    return result
-                except:
-                    session.abort_transaction()
-                    raise Exception(e)
-                
+        result = self._db[self._collection].insert_one(data)
+        self.backup_one(data)
+        return result
+
+
 
     def backup_one(self, data):
         if(self._backup_db is not None and IS_INTERNAL_PRODUCTION):

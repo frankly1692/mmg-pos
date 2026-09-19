@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 
 # Import all seeders
-from app.seeders import branches_and_roles, users, discounts, product_categories, packages, products
+from app.seeders import branches_and_roles, users, discounts, product_categories, packages, products, audit_logs_lookup
 
 load_dotenv()
 
@@ -60,6 +60,10 @@ def seed_all():
         # 6. Products (depends on categories existing)
         print("\n━━ Products ━━", flush=True)
         products.seed(log)
+
+        # 7. Audit log action display names
+        print("\n━━ Audit Log Lookup ━━", flush=True)
+        audit_logs_lookup.seed(log)
 
         print("\n✓ All seeding complete.\n", flush=True)
     except Exception as e:

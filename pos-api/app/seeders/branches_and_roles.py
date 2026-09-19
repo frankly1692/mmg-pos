@@ -46,7 +46,10 @@ RESOURCES = [
 
 ADMIN_ROLE = {
     "name": "admin",
-    "authorizations": {r: ["read", "create", "update", "delete"] for r in RESOURCES},
+    "authorizations": [
+        {"resource": r, "permissions": {"read": True, "create": True, "update": True, "delete": True}}
+        for r in RESOURCES
+    ],
 }
 
 CASHIER_RESOURCES = [
@@ -67,7 +70,10 @@ CASHIER_RESOURCES = [
 
 CASHIER_ROLE = {
     "name": "cashier",
-    "authorizations": {r: ["read", "create", "update"] for r in CASHIER_RESOURCES},
+    "authorizations": [
+        {"resource": r, "permissions": {"read": True, "create": True, "update": True}}
+        for r in CASHIER_RESOURCES
+    ],
 }
 
 

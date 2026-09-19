@@ -51,6 +51,7 @@ export default function () {
     const { mutateAsync } = useMutation(role.CreateRole);
 
     const handleClickOpen = () => {
+        setPermissions({});
         setOpen(true);
     };
 
