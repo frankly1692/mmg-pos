@@ -8,6 +8,13 @@ const CONNECT_TIMEOUT_MS = 5000
 // The helper retries the printer connection (~5 s) before it prints, so leave generous room.
 const REPLY_TIMEOUT_MS = 30000
 
+// Local-dev-only escape hatch: pos-helper-app is a Windows executable that never runs in this
+// docker-compose stack, so getTerminalInfo() can never really succeed here. Set
+// VITE_APP_SKIP_TERMINAL_CHECK=true (docker-compose.yml only — NEVER docker-compose.prod.yml or
+// a real branch deployment) to fake a terminal response so checkout isn't blocked in dev.
+const SKIP_TERMINAL_CHECK = import.meta.env.VITE_APP_SKIP_TERMINAL_CHECK === 'true'
+const DEV_MOCK_TERMINAL_INFO = { MIN: 'DEV-MIN', SN: 'DEV-SN', PTU_NO: 'DEV-PTU-LOCAL' }
+
 const PrinterProvider = ({ children }) => {
     const [socket, setSocket] = useState(null);
     const [printing, setPrinting] = useState(false)
@@ -130,8 +137,19 @@ const PrinterProvider = ({ children }) => {
         return print("display", type, data)
     }
 
+    // Resolves with { MIN, SN, PTU_NO } read from this workstation's terminal.json via the
+    // helper app, or { error } if the helper app can't be reached. Used at checkout time to
+    // scope invoice numbers per accredited terminal (BIR compliance) — see Checkout.jsx.
+    function getTerminalInfo() {
+        if (SKIP_TERMINAL_CHECK) {
+            console.warn('[DEV] VITE_APP_SKIP_TERMINAL_CHECK is set — using mock terminal info instead of querying the helper app.')
+            return Promise.resolve(DEV_MOCK_TERMINAL_INFO)
+        }
+        return print("terminal", "info", {})
+    }
+
     return (
-        <PrinterContext.Provider value={{ socket, printing, print, status, display }}>
+        <PrinterContext.Provider value={{ socket, printing, print, status, display, getTerminalInfo }}>
             {children}
         </PrinterContext.Provider>
     )

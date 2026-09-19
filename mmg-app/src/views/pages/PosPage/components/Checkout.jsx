@@ -3,6 +3,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { useMutation, useQueryClient } from 'react-query';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { toast } from 'react-toastify';
 import { Card, Typography, Grid, Button, Stack, Divider, Modal, TextField, InputAdornment, Chip, CircularProgress, Box } from '@mui/material';
 import { MdChevronLeft } from 'react-icons/md';
 import Receipt from './Receipt';
@@ -34,7 +35,7 @@ const schema = yup.object().shape({
 });
 
 const Checkout = ({ combinedData, handleBack, handleSuccessTrans, ar }) => {
-    const { display: showCustomerDisplay } =  usePrinter()
+    const { display: showCustomerDisplay, getTerminalInfo } =  usePrinter()
     // const { mutate: showCustomerDisplay } = useMutation(print.Display)
     const [amountGiven, setAmountGiven] = useState('');
     const [paymentMethod, setPaymentMethod] = useState(ar ? 'charge' : 'cash');
@@ -42,6 +43,20 @@ const Checkout = ({ combinedData, handleBack, handleSuccessTrans, ar }) => {
     const tenderFieldRef = useRef(null);
     const [isChipClicked, setIsChipClicked] = useState(false);
     const [loading, setLoading] = useState(false);
+    // One key per mount of this checkout screen (i.e. per Pay attempt) — sent with the create
+    // request so the backend can recognize a retried/duplicated submission (double-click that
+    // outraces the `loading` state re-render, a dropped response that gets resent, etc.) as the
+    // same sale instead of creating a second transaction and burning a second invoice number.
+    const idempotencyKeyRef = useRef(
+        typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    // Guards against a second handlePayClick firing before the `loading` state above has
+    // re-rendered the Pay button as disabled (state updates aren't synchronous, so a fast
+    // double-click/double-tap can call this twice in the same tick). Checked and set
+    // synchronously as the very first thing in the handler, unlike `loading`.
+    const isSubmittingRef = useRef(false);
     const paymentTypes = ['cash', 'cheque'];
 
     // const paymentTypes = ['cash', 'cheque',  'charge'];
@@ -215,11 +230,32 @@ const Checkout = ({ combinedData, handleBack, handleSuccessTrans, ar }) => {
     };
 
     const handlePayClick = async () => {
+        if (isSubmittingRef.current) {
+            return;
+        }
+        isSubmittingRef.current = true;
         setLoading(true);
         try {
+            // Invoice numbers must be sequential per accredited terminal (BIR PTU rule) — the
+            // terminal's PTU lives only in terminal.json on this workstation, read via the
+            // helper app. If it can't be reached, we cannot legally issue an invoice number,
+            // so the sale is blocked rather than silently falling back to a shared sequence.
+            const terminalInfo = await getTerminalInfo();
+            if (!terminalInfo?.PTU_NO) {
+                toast.error(
+                    'Cannot complete sale: unable to reach this terminal\'s printer helper to confirm its accreditation (PTU). Check that the helper app is running, then try again.'
+                );
+                return;
+            }
+
             const newData = buildNewData(paymentMethod, amountGiven);
-            await editTransactionMutation.mutateAsync({ ...newData, branchId: branch.id });
-            
+            await editTransactionMutation.mutateAsync({
+                ...newData,
+                branchId: branch.id,
+                ptuNumber: terminalInfo.PTU_NO,
+                idempotencyKey: idempotencyKeyRef.current
+            });
+
             showCustomerDisplay('next')
 
             await refetchCashierReport()
@@ -230,6 +266,7 @@ const Checkout = ({ combinedData, handleBack, handleSuccessTrans, ar }) => {
             // Handle the error (e.g., show a specific error message based on error type)
         } finally {
             setLoading(false);
+            isSubmittingRef.current = false;
         }
     };
 

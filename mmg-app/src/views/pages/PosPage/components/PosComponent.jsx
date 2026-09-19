@@ -77,7 +77,7 @@ const generateTransactionNumber = () => {
 };
 
 const calculatePackagePrice = (packageItem) => {
-  const packageLabTestPrice = packageItem.labTest.reduce((acc, labTest) => acc + labTest.price, 0);
+  const packageLabTestPrice = (packageItem.labTest || []).reduce((acc, labTest) => acc + labTest.price, 0);
 
   let discountedPrice;
   let originalPrice = packageLabTestPrice;
@@ -161,6 +161,14 @@ const PosComponent = () => {
   const [selectedPackages, setSelectedPackages] = useState([]);
   const [selectedLabTest, setSelectedlabTest] = useState([]);
   const [transactionData, setTransactionData] = useState([]);
+  // Deliberately separate from transactionData.id — that field is also populated by the
+  // unrelated legacy "New Transaction" shell record (createTransactionMutation ->
+  // /transaction/create, the old `transactions` collection) on every fresh transaction, so it
+  // can't be trusted as a signal that this cart came from a restored hold. Only
+  // handleRestoreTransaction sets this, and it's the only thing Checkout.jsx uses to decide
+  // whether completing this cart should convert an existing v3 hold document (see
+  // pos-api/app/blueprints/transaction.py: v3_create_transaction) instead of creating a new one.
+  const [holdTransactionId, setHoldTransactionId] = useState(null);
 
   const [selectedPackagesX, setSelectedPackagesX] = useState({
     packages: [],
@@ -228,6 +236,7 @@ const PosComponent = () => {
       setReferredBy([]);
       setCustomerData([]);
       setTransactionData([]);
+      setHoldTransactionId(null);
       setSelectedPackages([]);
       setSelectedlabTest([]);
       setItems([]);
@@ -364,8 +373,8 @@ const PosComponent = () => {
     }
 
     // Count total items (lab tests and packages)
-    const totalPackageLabTests = selectedPackagesX.packages.reduce((acc, packageItem) => acc + packageItem.labTest.length, 0);
-    const totalPromoLabTests = selectedPackagesX.promos.reduce((acc, promoItem) => acc + promoItem.labTest.length, 0);
+    const totalPackageLabTests = selectedPackagesX.packages.reduce((acc, packageItem) => acc + (packageItem.labTest?.length || 0), 0);
+    const totalPromoLabTests = selectedPackagesX.promos.reduce((acc, promoItem) => acc + (promoItem.labTest?.length || 0), 0);
     const totalLabTests = selectedPackagesX.labtests.length;
 
     const grandTotalItems = totalPackageLabTests + totalPromoLabTests + totalLabTests;
@@ -382,7 +391,7 @@ const PosComponent = () => {
           ...item,
           _id: item?._id,
           source: 'package',
-          labTest: item?.labTest.map((test) => ({
+          labTest: (item?.labTest || []).map((test) => ({
             qty: 1, // Ensure quantity is always 1
             price: test.price,
             amount: test.price * 1,
@@ -407,7 +416,7 @@ const PosComponent = () => {
           ...item,
           _id: item?._id,
           source: 'promo',
-          labTest: item?.labTest.map((test) => ({
+          labTest: (item?.labTest || []).map((test) => ({
             qty: 1, // Ensure quantity is always 1
             price: test.price,
             amount: test.price * 1,
@@ -513,6 +522,7 @@ const PosComponent = () => {
     setReferredBy([]);
     setCustomerData([]);
     setTransactionData([]);
+    setHoldTransactionId(null);
     setSelectedPackages([]);
     setSelectedlabTest([]);
     setItems([]);
@@ -549,7 +559,24 @@ const PosComponent = () => {
       const restoredRequestedBy = combinedDoctorData.find((doctor) => doctor.id === selectedTransaction?.requestedBy?._id);
       const restoredReferredBy = combinedDoctorData.find((doctor) => doctor.id === selectedTransaction?.referredBy?._id);
 
-      setCustomerData(selectedTransaction?.customerData);
+      // The saved transaction (GET /v2/transactions) nests a full `customer` record, not the
+      // flat `customerData` shape CusCorSelect/setCustomerData use elsewhere — map it across.
+      const customer = selectedTransaction?.customer;
+      setCustomerData(
+        customer
+          ? {
+              id: customer._id,
+              name: customer.name,
+              address: customer.address
+                ? `${customer.address.street} ${customer.address.barangay} ${customer.address.cityMunicipality} ${customer.address.province} ${customer.address.country}`
+                : '',
+              age: customer.age,
+              tin: customer.tin_number,
+              contactNumber: customer.contact_number,
+              customerType: customer.customer_type
+            }
+          : []
+      );
 
       setRequestedBy({
         id: restoredRequestedBy?.id,
@@ -565,42 +592,75 @@ const PosComponent = () => {
         id: selectedTransaction?._id,
         invoiceNumber: selectedTransaction?.invoiceNumber
       });
+      // Marks this cart as "completing a held sale" so Pay converts the original hold document
+      // in place instead of creating a second, disconnected completed transaction next to it.
+      setHoldTransactionId(selectedTransaction?._id);
 
       setReferenceNumber(selectedTransaction?.invoiceNumber);
 
-      // Refactor to handle both array and single item cases for items
-      const services = selectedTransaction?.services;
+      // Rebuild the cart from the flat `transactionItems` array the backend stores — the
+      // inverse of the reduce() in api/transaction.js's CreateTransactionV2. Each item that
+      // belonged to a package/promo carries a `package` reference (only { id, name,
+      // description, type } survive — price/discount metadata isn't preserved once saved, so a
+      // restored package shows its items and their real prices but not the original discount
+      // rule); items with no `package` were added individually as standalone lab tests.
+      const transactionItems = selectedTransaction?.transactionItems || [];
+      const packageGroups = new Map();
+      const restoredLabTests = [];
 
-      if (Array.isArray(services)) {
-        // Set items directly if services is an array
-        setItems(services);
+      transactionItems.forEach((rawItem, index) => {
+        const pkg = rawItem?.package;
+        const asCartItem = {
+          _id: rawItem?._id || `${selectedTransaction?._id}-${index}`,
+          name: rawItem?.name,
+          price: rawItem?.price,
+          qty: rawItem?.quantity ?? 1,
+          amount: (rawItem?.price ?? 0) * (rawItem?.quantity ?? 1),
+          category: rawItem?.categoryId ? { id: rawItem.categoryId } : null
+        };
 
-        // Set selected packages if services is an array
-        const labTests = services.filter((service) => service.source === 'package').map((service) => service._id);
+        if (!pkg) {
+          restoredLabTests.push({ ...asCartItem, source: 'labTest' });
+          return;
+        }
 
-        const labTestsForLabTests = services
-          .filter((service) => service.source === 'labTest')
-          .map((service) => ({
-            id: service._id,
-            name: service.name
-          }));
+        if (!packageGroups.has(pkg.id)) {
+          packageGroups.set(pkg.id, {
+            _id: pkg.id,
+            name: pkg.name,
+            description: pkg.description,
+            packageType: pkg.type,
+            source: pkg.type === 'promo' ? 'promo' : 'package',
+            labTest: []
+          });
+        }
+        packageGroups.get(pkg.id).labTest.push(asCartItem);
+      });
 
-        setSelectedPackages(labTests);
-        setSelectedlabTest(labTestsForLabTests);
-      } else {
-        // Handle the case where services is undefined or null
-        setItems([]);
-        setSelectedLabTest([]);
-      }
+      const restoredGroups = [...packageGroups.values()];
+      setSelectedPackagesX({
+        packages: restoredGroups.filter((group) => group.source === 'package'),
+        promos: restoredGroups.filter((group) => group.source === 'promo'),
+        labtests: restoredLabTests
+      });
+      setItems(transactionItems);
 
       setTransactionDate(moment(selectedTransaction?.transactionDate).format('MMMM Do YYYY, h:mm a'));
-      setSubTotal(selectedTransaction?.paymentDetails?.subTotal);
-      setTotal(selectedTransaction?.paymentDetails?.paymentDue);
-      setAppliedDiscount({
-        type: selectedTransaction?.discountApplied?.type,
-        value: selectedTransaction?.discountApplied?.value,
-        totalDiscount: selectedTransaction?.discountApplied?.totalDiscount
-      });
+      // These totals come from the transaction's own saved values (computed server-side at
+      // hold/save time), so they stay numerically correct even though the per-package discount
+      // rule above can't be perfectly reconstructed.
+      setSubTotal(selectedTransaction?.totalGrossSales);
+      setTotal(selectedTransaction?.totalNetSales);
+      const firstDiscount = selectedTransaction?.discounts?.[0];
+      setAppliedDiscount(
+        firstDiscount
+          ? {
+              type: firstDiscount.type,
+              value: firstDiscount.value,
+              totalDiscount: selectedTransaction?.totalDiscount
+            }
+          : null
+      );
 
       setDrawerOpen(false);
       setIsNewTrans(true);
@@ -679,6 +739,7 @@ const PosComponent = () => {
     setNewTransDialog(false);
     setIsNewTrans(true);
     setReferenceNumber(generateTransactionNumber);
+    setHoldTransactionId(null);
   };
 
   const handleBackPos = (param) => {
@@ -688,6 +749,7 @@ const PosComponent = () => {
       setReferredBy([]);
       setCustomerData([]);
       setTransactionData([]);
+      setHoldTransactionId(null);
       setSelectedPackages([]);
       setSelectedlabTest([]);
       setReferenceNumber(null);
@@ -752,6 +814,7 @@ const PosComponent = () => {
 
   const combinedData = {
     id: transactionData?.id,
+    holdTransactionId,
     invoiceNumber: transactionData?.invoiceNumber,
     customerData: customerData,
     requestedById: requestedBy.id,
@@ -949,7 +1012,7 @@ const PosComponent = () => {
                   <HoldItems
                     transaction={combinedData}
                     onSuccess={() => handleBackPos('success')}
-                    disabled={!customerData?.name}
+                    disabled={!customerData?.name || totalItems === 0}
                   />
                 </Grid>
                 <Grid item xs={12} lg={6}>

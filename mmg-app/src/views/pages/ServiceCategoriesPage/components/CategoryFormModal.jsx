@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Typography, TextField, Switch, Button, Stack, Dialog, DialogContent, DialogTitle } from '@mui/material';
+import { Box, Typography, TextField, Switch, Button, Stack, Dialog, DialogContent, DialogTitle, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -50,7 +51,12 @@ const CategoryFormModal = ({ open, onClose, onSubmit, category }) => {
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-            <DialogTitle sx={{ fontSize: '1.1rem' }}>{category ? 'Edit Category' : 'Create New Category'}</DialogTitle>
+            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {category ? 'Edit Category' : 'Create New Category'}
+                <IconButton onClick={handleCancel} size="small" aria-label="Close">
+                    <CloseIcon fontSize="small" />
+                </IconButton>
+            </DialogTitle>
             <DialogContent>
                 <Box pt={2}>
                     <Stack direction="column" justifyContent="flex-start" alignItems="flex-start" spacing={2}>

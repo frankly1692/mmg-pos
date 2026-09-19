@@ -250,7 +250,7 @@ const PosComponent = () => {
       const packageItems = {
         _id: item?._id,
         source: 'package',
-        items: item?.labTest.map((test) => ({
+        items: (item?.labTest || []).map((test) => ({
           _id: test.id,
           qty: 1, // Ensure quantity is always 1
           price: test.price,
@@ -908,7 +908,7 @@ const PosComponent = () => {
                     transaction={combinedData}
                     onHold={(onHold) => handleHoldTransaction(onHold)}
                     onSuccess={() => handleBackPos('success')}
-                    disabled={!customerData?.name}
+                    disabled={!customerData?.name || items.length === 0}
                   />
                 </Grid>
                 <Grid item xs={12} lg={6}>

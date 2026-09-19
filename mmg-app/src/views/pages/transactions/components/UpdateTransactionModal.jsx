@@ -1,6 +1,7 @@
 import * as React from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Grid, Typography, Button, Paper, Divider } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Grid, Typography, Button, Paper, Divider, Stack, IconButton } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useMutation, useQueryClient } from 'react-query';
@@ -13,7 +14,7 @@ import ReceiptModal from 'views/pages/PosPage/components/ReceiptModal';
 import WithPrintMutation from 'views/utilities/Print';
 
 const validationSchema = Yup.object().shape({
-    status: Yup.object().required()
+    status: Yup.object().required('Status is required')
 });
 
 export default function ({ initialValues: receipt }) {
@@ -138,7 +139,12 @@ export default function ({ initialValues: receipt }) {
                         { handleSubmit, submitForm, isSubmitting, values } // Access values
                     ) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>Edit Transaction</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Edit Transaction
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <Paper sx={{ height: '600px', overflowY: 'auto' }}>
                                     {' '}
@@ -192,7 +198,7 @@ export default function ({ initialValues: receipt }) {
                                     size="small"
                                     variant="contained"
                                 >
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

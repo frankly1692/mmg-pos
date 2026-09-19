@@ -59,7 +59,7 @@ function UsersPage() {
                 alignItems={{ xs: 'flex-start', sm: 'center' }}
                 justifyContent="space-between"
             >
-                <TextField variant="outlined" size="small" label="Search" onChange={handleSearch} />
+                <TextField variant="outlined" size="small" label="Search" onChange={handleSearch} sx={{ minWidth: 300 }} />
                 <CreateUserModal />
             </Stack>
             <Card sx={{ borderRadius: 2 }}>

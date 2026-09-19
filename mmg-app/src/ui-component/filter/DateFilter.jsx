@@ -21,7 +21,7 @@ export const DateFilterEnum = Object.freeze({
 });
 
 export const DateFilterOptions = [
-    { value: DateFilterEnum.ALL, label: <em>All</em> },
+    { value: DateFilterEnum.ALL, label: 'All' },
     { value: DateFilterEnum.TODAY, label: 'Today' },
     { value: DateFilterEnum.YESTERDAY, label: 'Yesterday' },
     { value: DateFilterEnum.THIS_WEEK, label: 'This Week' },

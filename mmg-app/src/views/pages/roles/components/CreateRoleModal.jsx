@@ -8,7 +8,8 @@ import AddIcon from '@mui/icons-material/Add';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 
 import Grid from '@mui/material/Grid';
-import { InputAdornment, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { InputAdornment, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Formik, useField } from 'formik';
 import * as Yup from 'yup';
 
@@ -19,7 +20,7 @@ import role from 'api/role';
 import Switch from 'ui-component/switch';
 
 const validationSchema = Yup.object().shape({
-    name: Yup.string().required()
+    name: Yup.string().required('Role name is required')
 });
 
 const features = [
@@ -182,7 +183,12 @@ export default function () {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem', mb: 0 }}>New Role</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', mb: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                New Role
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <TextField name="name" label="Role Name" sx={{ mt: 1, mb: 2 }} />
                                 <Typography className="required" variant="h5" ml={1} mb={1} color="grey.400" fontWeight="regular">
@@ -249,7 +255,7 @@ export default function () {
                             <DialogActions>
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Button disableElevation disabled={isSubmitting} onClick={submitForm} size="small" variant="contained">
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

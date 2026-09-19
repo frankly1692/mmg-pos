@@ -120,6 +120,7 @@ const ServiceForm = () => {
         },
         onSuccess: () => {
             toast.success('Service created successfully.', {
+                autoClose: 1500,
                 onClose: handleNavigation
             });
         },
@@ -141,6 +142,7 @@ const ServiceForm = () => {
         },
         onSuccess: () => {
             toast.success('Lab Test edited successfully.', {
+                autoClose: 1500,
                 onClose: handleNavigation
             });
         },

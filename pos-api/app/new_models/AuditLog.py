@@ -20,8 +20,10 @@ class AuditCode(IntEnum):
     TRANSACTION_CREATE = 3001
     TRANSACTION_CREATE_ERR = 3101
     TRANSACTION_CREATE_ERR_SALES = 3201
+    INVOICE_NUMBER_GAP = 3301
     CASHIER_REPORT_TIME_IN = 4001
     CASHIER_REPORT_TIME_IN_ERR = 4101
+    CASHIER_REPORT_TIME_IN_DUPLICATE = 4102
     CASHIER_REPORT_TIME_OUT = 5001
     CASHIER_REPORT_TIME_OUT_ERR = 5101
     CUSTOMER_CREATE = 6001
@@ -53,8 +55,10 @@ DEFAULT_MESSAGES = {
     AuditCode.TRANSACTION_CREATE: "Transaction created.",
     AuditCode.TRANSACTION_CREATE_ERR: "Failed to create transaction.",
     AuditCode.TRANSACTION_CREATE_ERR_SALES: "Failed to create sales record for transaction.",
+    AuditCode.INVOICE_NUMBER_GAP: "A sequential number (invoice or cancel/refund serial) was allocated but the transaction failed to save — gap requires review.",
     AuditCode.CASHIER_REPORT_TIME_IN: "Cashier timed in.",
     AuditCode.CASHIER_REPORT_TIME_IN_ERR: "Failed to time in cashier report.",
+    AuditCode.CASHIER_REPORT_TIME_IN_DUPLICATE: "Duplicate time-in attempt blocked — a shift report already exists for this cashier/branch/date.",
     AuditCode.CASHIER_REPORT_TIME_OUT: "Cashier timed out.",
     AuditCode.CASHIER_REPORT_TIME_OUT_ERR: "Failed to time out cashier report.",
     AuditCode.CUSTOMER_CREATE: "Customer record created.",

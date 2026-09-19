@@ -17,7 +17,8 @@ import {
     Chip,
     IconButton,
     TablePagination,
-    CircularProgress
+    CircularProgress,
+    Tooltip
 } from '@mui/material';
 import { MdUndo, MdRemoveRedEye } from 'react-icons/md';
 import moment from 'moment';
@@ -74,16 +75,6 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
     const [customDateFilter, setCustomDateFilter] = useState({});
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [selectedTransactionId, setSelectedTransactionId] = React.useState(null);
-
-    const { data: indiTrans, isLoading: loadingTrans } = useQuery(
-        ['transaction', selectedTransactionId],
-        () => transaction.GetTransaction(selectedTransactionId),
-        {
-            enabled: !!selectedTransactionId // Only run the query if a transaction ID is set
-        }
-    );
-
 
     useEffect(() => {
         let transactions = data || [];
@@ -144,18 +135,6 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
         setTransactions(transactions);
     }, [data, dateFilter, branchFilter, statusFilter, searchFilter]);
 
-    useEffect(() => {
-        if (selectedTransactionId) {
-            console.log('dataXXX', indiTrans);
-            onRestoreTransaction(indiTrans); // Trigger restoration if needed
-        }
-    }, [indiTrans, selectedTransactionId]);
-
-    const handleApply = (transactionId) => {
-        setSelectedTransactionId(transactionId);
-        onRestoreTransaction(transactionId); // Trigger restoration
-    };
-
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
     };
@@ -196,16 +175,26 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
                             <TableRow key={transaction?._id}>
                                 <TableCell>
                                     <Stack direction="row" justifyContent="flex-start" alignItems="center" spacing={2}>
-                                        <IconButton onClick={() => handleApply(transaction?.id)} disabled={transaction?.status !== 'hold'}>
-                                            <MdUndo />
-                                        </IconButton>
+                                        <Tooltip title={transaction?.status === 'hold' ? 'Restore held transaction' : 'Only held transactions can be restored'}>
+                                            <span>
+                                                <IconButton
+                                                    onClick={() => onRestoreTransaction(transaction)}
+                                                    disabled={transaction?.status !== 'hold'}
+                                                    aria-label="Restore held transaction"
+                                                >
+                                                    <MdUndo />
+                                                </IconButton>
+                                            </span>
+                                        </Tooltip>
                                         {/* <IconButton>
                                             <MdRemoveRedEye />
                                         </IconButton> */}
                                     </Stack>
                                 </TableCell>
                                 <TableCell>
-                                    {transaction.status == 'completed' || !transaction.serialNumber ? String(transaction.invoiceNumber).padStart(6, '0') : ''}
+                                    {transaction.invoiceNumber != null && (transaction.status == 'completed' || !transaction.serialNumber)
+                                        ? String(transaction.invoiceNumber).padStart(6, '0')
+                                        : ''}
                                 </TableCell>
                                 <TableCell component="th" scope="row">
                                     {transaction.status == 'completed' || !transaction.serialNumber ? '' : String(transaction.serialNumber).padStart(6, '0')}
@@ -229,9 +218,9 @@ const TransactionsSlideBar = ({ cashierId, role, onRestoreTransaction }) => {
                                 </TableCell>
                                 <TableCell>{transaction.cashier?.name}</TableCell>
                                 <TableCell>{transaction.customer?.name}</TableCell>
-                                <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled', 'refunded'].includes(transaction.status) || !transaction.serialNumber ? transaction.totalSalesWithoutMemberDiscount.toFixed(2) : null}</TableCell>
-                                <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled', 'refunded'].includes(transaction.status) || !transaction.serialNumber ? transaction.totalMemberDiscount.toFixed(2) : null}</TableCell>
-                                <TableCell sx={{ textWrap: 'nowrap' }}>{transaction.status != 'cancelled' || !transaction.serialNumber ? transaction.totalNetSales.toFixed(2) : null}</TableCell>
+                                <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled', 'refunded'].includes(transaction.status) || !transaction.serialNumber ? (transaction.totalSalesWithoutMemberDiscount ?? 0).toFixed(2) : null}</TableCell>
+                                <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled', 'refunded'].includes(transaction.status) || !transaction.serialNumber ? (transaction.totalMemberDiscount ?? 0).toFixed(2) : null}</TableCell>
+                                <TableCell sx={{ textWrap: 'nowrap' }}>{transaction.status != 'cancelled' || !transaction.serialNumber ? (transaction.totalNetSales ?? 0).toFixed(2) : null}</TableCell>
 
 
                             </TableRow>

@@ -72,6 +72,12 @@ async function CreateTransactionV2(model) {
         transactionItems,
         customerId: model.customerData.id,
         status: model.status.toLowerCase(),
+        ptuNumber: model.ptuNumber,
+        idempotencyKey: model.idempotencyKey,
+        // Present only when paying a transaction restored from a hold (see
+        // PosComponent.jsx: handleRestoreTransaction) — tells the backend to convert that hold
+        // document in place instead of inserting a second, disconnected completed transaction.
+        holdTransactionId: model.holdTransactionId,
         tender: model.paymentDetails ? {
             ...model.paymentDetails,
             amount: model.paymentDetails.tenderAmount,

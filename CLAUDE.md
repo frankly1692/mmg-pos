@@ -39,7 +39,7 @@ A standalone Python `asyncio` WebSocket server that bridges the browser to physi
 - Routes JSON messages by `{ "device": "printer"|"display"|"terminal", "device_type": "..." }`
   - Printer types: `receipt`, `report`, `test`
   - Display types: `message`, `item`, `total`, `next`
-  - Terminal types: `info` — returns `{ MIN, SN, PTU_NO }` for the current workstation
+  - Terminal types: `info` — returns `{ MIN, SN, PTU_NO }` for the current workstation. `mmg-app` queries this fresh at checkout and sends `PTU_NO` with the transaction — pos-api uses it to scope the invoice-number sequence per terminal (see Invoice Number under Key Domain Concepts)
 - All blocking hardware calls use `asyncio.to_thread` to keep the event loop responsive
 - `ReceiptWriter` is a context manager that opens `ejournal.txt` once per transaction and writes to both the file and ESC/POS printer simultaneously — journals to file even when the physical printer is offline
 - `ejournal.txt`, `config.json` and `helper.log` live in `C:\MMG-POS` (override with the `MMG_POS_DATA_DIR` env var), so every launch method resolves to the same files
@@ -366,7 +366,7 @@ VITE_APP_BASE_NAME=/
 ## Key Domain Concepts
 
 - **Transaction** — a sale with items, discounts, tender, and status (`completed`, `cancelled`, `refunded`, `on-hold`)
-- **Invoice Number** — sequential counter stored in `counters` collection; zero-padded to 6 digits on receipts
+- **Invoice Number** — sequential counter stored in `counters` collection, zero-padded to 6 digits on receipts. **Unique per accredited terminal (PTU), not per branch or per cashier** — this is a BIR compliance requirement: each accredited machine must issue its own continuous, gap-free series. The counter document is keyed by `{ type: "INVOICE_NUMBER", ptuNumber }`; `ptuNumber` comes from the completing terminal's `terminal.json`/`config.json` (`PTU_NO`), fetched fresh from the helper app (`{ device: "terminal", device_type: "info" }`) at the moment a sale is completed (`Checkout.jsx`) — never cached across a session, since the file can change if the terminal is re-accredited mid-shift. **If the helper app can't be reached, checkout is blocked** rather than falling back to a shared/default series — the backend rejects a `completed` transaction with no `ptuNumber` (`app/new_models/Transaction.py: CreateTransaction.requirePtuNumberWhenCompleted`). Cancel/refund serial numbers (`CANCEL_NUMBER` / `REFUND_NUMBER`) follow the identical rule, scoped by the PTU of the terminal performing the cancel/refund (not the terminal that issued the original invoice) — see `app/blueprints/transaction.py: v3_create_transaction` / `v3_cancel_transaction`.
 - **X-Report** — per-cashier shift summary (time-in to time-out)
 - **Z-Report** — end-of-day summary across all cashiers; includes accumulated sales, discount breakdown, cash drawer count
 - **Electronic Journal** (`ejournal.txt`) — append-only flat-file log of every non-reprint receipt; written by the helper app even when printer is offline

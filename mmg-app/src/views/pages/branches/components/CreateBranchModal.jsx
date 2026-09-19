@@ -7,7 +7,8 @@ import DialogTitle from '@mui/material/DialogTitle';
 import AddIcon from '@mui/icons-material/Add';
 
 import Grid from '@mui/material/Grid';
-import { Divider, Stack, Typography } from '@mui/material';
+import { Divider, Stack, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useMutation, useQueryClient } from 'react-query';
@@ -15,9 +16,9 @@ import branch from 'api/branch';
 import TextField from 'ui-component/TextField';
 
 const validationSchema = Yup.object().shape({
-    fullAddress: Yup.string().required(),
-    name: Yup.string().required(),
-    tin: Yup.string().required(),
+    streetAddress: Yup.string().required('Address is required'),
+    name: Yup.string().required('Name is required'),
+    tin: Yup.string().required('TIN is required'),
     // city: Yup.string().required(),
     // postalCode: Yup.string().required(),
     // state: Yup.string().required(),
@@ -48,7 +49,7 @@ export default function () {
             <Dialog open={open} maxWidth="xs" fullWidth onClose={handleClose}>
                 <Formik
                     initialValues={{
-                        fullAddress: '',
+                        streetAddress: '',
                         name: '',
                         // city: '',
                         tin: '',
@@ -70,7 +71,12 @@ export default function () {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>New Branch</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                New Branch
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
@@ -93,12 +99,12 @@ export default function () {
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={9}>
-                                        <TextField 
+                                        <TextField
                                             multiline
                                             rows={3}
                                             maxRows={3}
-                                            name="fullAddress" 
-                                            placeholder="Full Address" 
+                                            name="streetAddress"
+                                            placeholder="Full Address"
                                         />
                                         {/* <Stack spacing={2}>
                                             
@@ -128,7 +134,7 @@ export default function () {
                             <DialogActions>
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Button disableElevation disabled={isSubmitting} onClick={submitForm} size="small" variant="contained">
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

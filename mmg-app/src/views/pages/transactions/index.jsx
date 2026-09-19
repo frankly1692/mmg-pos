@@ -182,7 +182,13 @@ function TransactionsPage() {
             <MainCard title="Transactions">
                 <LocalizationProvider dateAdapter={AdapterMoment}>
                     <Stack mb={1} spacing={1} direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }}>
-                        <TextField value={searchFilter} onChange={(e) => setSearchFilter(e.target?.value)} size="small" label="Search" />
+                        <TextField
+                            value={searchFilter}
+                            onChange={(e) => setSearchFilter(e.target?.value)}
+                            size="small"
+                            label="Search"
+                            sx={{ minWidth: 300 }}
+                        />
                         <TextField
                             select
                             size="small"
@@ -191,9 +197,7 @@ function TransactionsPage() {
                             onChange={(e) => setStatusFilter(e?.target?.value)}
                             sx={{ minWidth: 150 }}
                         >
-                            <MenuItem value={DEFAULT_FILTER}>
-                                <em>All</em>
-                            </MenuItem>
+                            <MenuItem value={DEFAULT_FILTER}>All</MenuItem>
                             {data &&
                                 ['completed', 'hold', 'cancelled', 'refunded']
                                     .map((status) => <MenuItem value={status}>{startCase(status)}</MenuItem>)}

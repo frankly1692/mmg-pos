@@ -60,7 +60,7 @@ function CorporatesPage() {
                 alignItems={{ xs: 'flex-start', sm: 'center' }}
                 justifyContent="space-between"
             >
-                <TextField size="small" label="Search"  onChange={handleSearch}/>
+                <TextField size="small" label="Search" onChange={handleSearch} sx={{ minWidth: 300 }} />
                 <CreateDoctorModal />
             </Stack>
 

@@ -96,7 +96,7 @@ const PromoContainer = ({ items, onRemoveItem }) => {
                                     </TableCell>
                                 </TableRow>
                             ) : null}
-                            {item.labTest.map((subItem, subIndex) => (
+                            {(item.labTest || []).map((subItem, subIndex) => (
                                 <TableRow
                                     key={`${index}-${subIndex}`}
                                     sx={{

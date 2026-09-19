@@ -49,7 +49,7 @@ const CashRegister = ({ initialValues, isEndingBalanceFlag, handleBack }) => {
     const [isEndingBalance] = useState(isEndingBalanceFlag);
     const cashierReportContext = useCashierReport();
     const report = cashierReportContext?.report;
-    const { refetch } = cashierReportContext 
+    const { refetch } = cashierReportContext || {};
 
     const [submitting, setSubmitting] = useState(false)
     const [withdraw, setWithdraw] = useState(null)
@@ -63,7 +63,17 @@ const CashRegister = ({ initialValues, isEndingBalanceFlag, handleBack }) => {
     const theme = useTheme();
 
     const handleChange = (label, value) => {
-        const newEntries = { ...entries, [label]: Number(value) };
+        const number = Number(value);
+        if (number < 0) {
+            return;
+        }
+
+        const newEntries = { ...entries };
+        if (number > 0) {
+            newEntries[label] = number;
+        } else {
+            delete newEntries[label];
+        }
         setEntries(newEntries);
     };
 
@@ -166,10 +176,11 @@ const CashRegister = ({ initialValues, isEndingBalanceFlag, handleBack }) => {
                                     type="number"
                                     id={`denom-elem-${denom?.value}`}
                                     variant="outlined"
-                                    value={entries[denom?.value.toString()]}
-                                    onChange={(e) => handleChange(denom?.value.toString(), Number(e.target?.value))}
+                                    value={entries[denom?.value.toString()] ?? ''}
+                                    onChange={(e) => handleChange(denom?.value.toString(), e.target?.value)}
                                     fullWidth
                                     inputProps={{
+                                        min: 0,
                                         style: { textAlign: 'end', paddingRight: '20px' },
                                         onKeyDown:  (event) => {
                                                   const { key } = event;
@@ -223,7 +234,7 @@ const CashRegister = ({ initialValues, isEndingBalanceFlag, handleBack }) => {
                             Please review the entered denominations and their totals before confirming.
                         </Typography>
                         <Grid container>
-                            {Object.keys(entries).map((cash) => (
+                            {Object.keys(entries).filter((cash) => entries[cash] > 0).map((cash) => (
                                 <>
                                     <Grid key={cash} item xs={1.5}>
                                         <Stack direction="row" alignItems="center">

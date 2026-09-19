@@ -116,15 +116,13 @@ const CustomerList = () => {
                         onChange={handleCategoryChange}
                         sx={{ minWidth: 200 }}
                     >
-                        <MenuItem value="all">
-                            <em>All</em>
-                        </MenuItem>
+                        <MenuItem value="all">All</MenuItem>
                         {customers &&
                             Object.keys(Object.groupBy(customers, ({ customerType }) => customerType))
                                 .filter((key) => !key || key != 'undefined')
                                 .map((customerType) => <MenuItem value={customerType}>{startCase(customerType)}</MenuItem>)}
                     </TextField>
-                    <TextField label="Search" variant="outlined" onChange={handleSearch} size="small" />
+                    <TextField label="Search" variant="outlined" onChange={handleSearch} size="small" sx={{ minWidth: 300 }} />
                 </Stack>
                 <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2}>
                     <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleNewCustomer}>

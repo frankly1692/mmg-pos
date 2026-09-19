@@ -5,7 +5,8 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import EditIcon from '@mui/icons-material/Edit';
-import { Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material';
+import { Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import Switch from 'ui-component/switch';
@@ -15,7 +16,7 @@ import role from 'api/role';
 import { snakeCase, toLower } from 'lodash';
 
 const validationSchema = Yup.object().shape({
-    name: Yup.string().required()
+    name: Yup.string().required('Role name is required')
 });
 
 const features = [
@@ -54,7 +55,7 @@ export default function ({ initialValues }) {
     const [permissions, setPermissions] = React.useState({});
 
     const queryClient = useQueryClient();
-    const { mutateAsync } = useMutation(role.CreateRole);
+    const { mutateAsync } = useMutation(role.UpdateRole);
 
     React.useEffect(() => {
         if (initialValues) {
@@ -154,6 +155,27 @@ export default function ({ initialValues }) {
         </Button>
     );
 
+    const handleFormSubmit = async (values, actions) => {
+        try {
+            const authorizations = Object.keys(permissions).map((key) => ({
+                resource: key,
+                permissions: permissions[key]
+            }));
+
+            await mutateAsync({
+                id: initialValues?.id,
+                name: values.name,
+                authorizations
+            });
+            queryClient.invalidateQueries('roles');
+            handleClose();
+        } catch (e) {
+            actions.setFieldError('submit', e.message);
+        } finally {
+            actions.setSubmitting(false);
+        }
+    };
+
     if (!open) return renderButton();
 
     console.log('initialValues', initialValues);
@@ -167,20 +189,17 @@ export default function ({ initialValues }) {
                         name: initialValues?.name || '',
                         permissions
                     }}
-                    onSubmit={(values, actions) => {
-                        mutateAsync(values)
-                            .then(() => {
-                                queryClient.invalidateQueries('roles');
-                                handleClose();
-                            })
-                            .catch((e) => actions.setFieldError('submit', e))
-                            .finally(() => actions.setSubmitting(false));
-                    }}
+                    onSubmit={handleFormSubmit}
                     validationSchema={validationSchema}
                 >
                     {({ handleSubmit, submitForm, isSubmitting, handleChange, handleBlur, values }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem', mb: 0 }}>Edit Role</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', mb: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Edit Role
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <TextField
                                     name="name"
@@ -256,7 +275,7 @@ export default function ({ initialValues }) {
                             <DialogActions>
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Button disableElevation disabled={isSubmitting} onClick={submitForm} size="small" variant="contained">
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

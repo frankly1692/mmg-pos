@@ -24,6 +24,10 @@ services:
       - VITE_APP_BASE_NAME=/
       # Browser connects to the proxy through the host-mapped port
       - VITE_APP_SERVER_PORT=8002
+      # Local dev only: pos-helper-app never runs in this stack, so checkout would otherwise
+      # always block on the PTU/terminal check. NEVER set this in docker-compose.prod.yml or on
+      # a real branch deployment — it fakes the accredited-terminal identity.
+      - VITE_APP_SKIP_TERMINAL_CHECK=true
     restart: always
 
   # ─── Flask API ─────────────────────────────────────────────────────────────

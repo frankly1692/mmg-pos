@@ -15,18 +15,19 @@ import user from 'api/user';
 
 import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import CloseIcon from '@mui/icons-material/Close';
 import RoleSelector from './RoleSelector';
 import BranchSelector from './BranchSelector';
 import TextField from 'ui-component/TextField';
 import { omit } from 'lodash';
 
 const validationSchema = Yup.object().shape({
-    firstName: Yup.string().required(),
-    lastName: Yup.string().required(),
-    username: Yup.string().required(),
-    password: Yup.string().required(),
-    branches: Yup.array().of(Yup.object()).required(),
-    role: Yup.object().required()
+    firstName: Yup.string().required('First name is required'),
+    lastName: Yup.string().required('Last name is required'),
+    username: Yup.string().required('Username is required'),
+    password: Yup.string().required('Password is required'),
+    branches: Yup.array().of(Yup.object()).min(1, 'At least one branch is required').required('At least one branch is required'),
+    role: Yup.object().required('Role is required')
 });
 
 export default function () {
@@ -87,7 +88,12 @@ export default function () {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>New User</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                New User
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent sx={{ mt: 1 }}>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
@@ -155,7 +161,7 @@ export default function () {
                             <DialogActions>
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Button disableElevation disabled={isSubmitting} onClick={submitForm} size="small" variant="contained">
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

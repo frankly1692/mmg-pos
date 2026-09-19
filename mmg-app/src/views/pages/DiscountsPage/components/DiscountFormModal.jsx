@@ -1,19 +1,30 @@
 import React from 'react';
-import { Box, TextField, Button, Stack, Dialog, DialogContent, DialogTitle, MenuItem } from '@mui/material';
+import { Box, TextField, Button, Stack, Dialog, DialogContent, DialogTitle, MenuItem, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 
 const schema = yup.object().shape({
     name: yup.string().required('Discount name is required'),
-    value: yup.number().required('Discount value is required').positive('Value must be positive'),
-    type: yup.string().required('Discount type is required')
+    type: yup.string().required('Discount type is required'),
+    value: yup
+        .number()
+        .required('Discount value is required')
+        .positive('Value must be positive')
+        .when('type', {
+            is: 'percentage',
+            then: (valueSchema) => valueSchema.max(100, 'Percentage value cannot exceed 100')
+        })
 });
 
 const DiscountFormModal = ({ open, onClose, onSubmit, discount }) => {
     const {
         control,
         handleSubmit,
+        watch,
+        setValue,
+        getValues,
         formState: { errors },
         reset
     } = useForm({
@@ -43,9 +54,19 @@ const DiscountFormModal = ({ open, onClose, onSubmit, discount }) => {
         onClose();
     };
 
+    const handleCancel = () => {
+        reset();
+        onClose();
+    };
+
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-            <DialogTitle sx={{ fontSize: '1.1rem' }}>{discount ? 'Edit Discount' : 'Create New Discount'}</DialogTitle>
+            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {discount ? 'Edit Discount' : 'Create New Discount'}
+                <IconButton onClick={handleCancel} size="small" aria-label="Close">
+                    <CloseIcon fontSize="small" />
+                </IconButton>
+            </DialogTitle>
             <DialogContent>
                 <Box pt={2}>
                     <form onSubmit={handleSubmit(handleFormSubmit)}>
@@ -81,6 +102,32 @@ const DiscountFormModal = ({ open, onClose, onSubmit, discount }) => {
                                 )}
                             />
                             <Controller
+                                name="type"
+                                control={control}
+                                render={({ field }) => (
+                                    <TextField
+                                        select
+                                        {...field}
+                                        label="Discount Type"
+                                        variant="outlined"
+                                        fullWidth
+                                        error={!!errors.type}
+                                        helperText={errors.type?.message}
+                                        onChange={(e) => {
+                                            field.onChange(e);
+                                            const newType = e.target.value;
+                                            const currentValue = getValues('value');
+                                            if (newType === 'percentage' && currentValue !== '' && Number(currentValue) > 100) {
+                                                setValue('value', 100, { shouldValidate: true });
+                                            }
+                                        }}
+                                    >
+                                        <MenuItem value="percentage">Percentage</MenuItem>
+                                        <MenuItem value="fixed">Fixed</MenuItem>
+                                    </TextField>
+                                )}
+                            />
+                            <Controller
                                 name="value"
                                 control={control}
                                 render={({ field }) => (
@@ -89,20 +136,17 @@ const DiscountFormModal = ({ open, onClose, onSubmit, discount }) => {
                                         label="Discount Value"
                                         type="number"
                                         error={!!errors.value}
-                                        helperText={errors.description?.message}
+                                        helperText={errors.value?.message}
                                         fullWidth
+                                        inputProps={watch('type') === 'percentage' ? { max: 100 } : undefined}
+                                        onChange={(e) => {
+                                            let val = e.target.value;
+                                            if (watch('type') === 'percentage' && val !== '' && Number(val) > 100) {
+                                                val = '100';
+                                            }
+                                            field.onChange(val);
+                                        }}
                                     />
-                                )}
-                            />
-                            <Controller
-                                name="type"
-                                control={control}
-                                render={({ field }) => (
-                                    <TextField select {...field} label="Discount Type" variant="outlined" fullWidth error={!!errors.value}
-                                        helperText={errors.description?.message}>
-                                        <MenuItem value="percentage">Percentage</MenuItem>
-                                        <MenuItem value="fixed">Fixed</MenuItem>
-                                    </TextField>
                                 )}
                             />
                             <Stack direction="row" justifyContent="flex-end" alignItems="flex-start" spacing={1} sx={{ width: '100%' }}>

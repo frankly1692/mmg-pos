@@ -91,7 +91,7 @@ const DiscountList = () => {
             }
         },
         onSuccess: () => {
-            toast.success('Discount created successfully.');
+            toast.success('Discount created successfully.', { autoClose: 1500 });
         },
         onSettled: () => {
             queryClient.invalidateQueries('discounts');
@@ -114,7 +114,7 @@ const DiscountList = () => {
             }
         },
         onSuccess: () => {
-            toast.success('Discount updated successfully.');
+            toast.success('Discount updated successfully.', { autoClose: 1500 });
         },
         onSettled: () => {
             queryClient.invalidateQueries('discounts');
@@ -272,17 +272,15 @@ const DiscountList = () => {
                 mb={3}
             >
                 <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2}>
-                    <Select value={selectedStatus} onChange={handleStatusChange} displayEmpty size="small">
-                        <MenuItem value="">
-                            <em>All Types</em>
-                        </MenuItem>
+                    <Select value={selectedStatus} onChange={handleStatusChange} displayEmpty size="small" sx={{ minWidth: 190 }}>
+                        <MenuItem value="">All Types</MenuItem>
                         {uniqueStatus.map((status) => (
                             <MenuItem key={status} value={status}>
                                 {status}
                             </MenuItem>
                         ))}
                     </Select>
-                    <TextField label="Search" variant="outlined" onChange={handleSearch} size="small" />
+                    <TextField label="Search" variant="outlined" onChange={handleSearch} size="small" sx={{ minWidth: 300 }} />
                 </Stack>
                 <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2}>
                     <Button startIcon={<AddIcon />} variant="contained" onClick={handleNewDiscount}>

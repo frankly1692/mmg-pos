@@ -77,6 +77,7 @@ const PackageForm = () => {
             description: '',
             discount: 0,
             packageType: '',
+            packageForMemberType: '',
             discountType: 'perItem',
             labTest: []
         }
@@ -211,6 +212,7 @@ const PackageForm = () => {
         },
         onSuccess: () => {
             toast.success('Package created successfully.', {
+                autoClose: 1500,
                 onClose: handleNavigation
             });
         },
@@ -233,6 +235,7 @@ const PackageForm = () => {
         },
         onSuccess: () => {
             toast.success('Service edited successfully.', {
+                autoClose: 1500,
                 onClose: handleNavigation
             });
         },
@@ -279,6 +282,15 @@ const PackageForm = () => {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    const handleInvalidSubmit = (formErrors) => {
+        const firstMessage =
+            formErrors.name?.message ||
+            formErrors.packageType?.message ||
+            (!Array.isArray(formErrors.labTest) && formErrors.labTest?.message) ||
+            'Please fix the highlighted fields before saving.';
+        toast.error(firstMessage);
     };
 
     const handleReset = () => {
@@ -446,8 +458,8 @@ const PackageForm = () => {
                                 variant="outlined"
                                 fullWidth
                                 value={field.value || ''}
-                                error={Boolean(errors.category)}
-                                helperText={errors.category?.message}
+                                error={Boolean(errors.packageType)}
+                                helperText={errors.packageType?.message}
                             >
                                 <MenuItem value="promo">Promo</MenuItem>
                                 <MenuItem value="package">Package</MenuItem>
@@ -523,7 +535,15 @@ const PackageForm = () => {
                                     value={selectedLabTests[index] || null}
                                     onChange={(event, newValue) => handleLabTestChange(index, newValue)}
                                     sx={{ width: 500 }}
-                                    renderInput={(params) => <TextField {...params} label="Select Lab Test" variant="outlined" />}
+                                    renderInput={(params) => (
+                                        <TextField
+                                            {...params}
+                                            label="Select Lab Test"
+                                            variant="outlined"
+                                            error={Boolean(errors.labTest?.[index]?._id)}
+                                            helperText={errors.labTest?.[index]?._id?.message}
+                                        />
+                                    )}
                                     disableClearable
                                     filterOptions={(options, { inputValue }) => {
                                         const existingIds = selectedLabTests?.map((item) => item?._id) || [];
@@ -582,6 +602,11 @@ const PackageForm = () => {
                         <Button type="button" onClick={() => append({ id: '', name: '', price: '' })}>
                             Add Lab Test
                         </Button>
+                        {!Array.isArray(errors.labTest) && errors.labTest?.message && (
+                            <Typography color="error" variant="body2" mt={1}>
+                                {errors.labTest.message}
+                            </Typography>
+                        )}
                     </div>
 
                     <Box sx={{ width: '100%' }}>
@@ -636,7 +661,7 @@ const PackageForm = () => {
                             variant="contained"
                             color="primary"
                             type="submit"
-                            onClick={handleSubmit(handleFormSubmit)}
+                            onClick={handleSubmit(handleFormSubmit, handleInvalidSubmit)}
                             disabled={isSubmitting}
                         >
                             Save

@@ -7,7 +7,8 @@ import DialogTitle from '@mui/material/DialogTitle';
 import EditIcon from '@mui/icons-material/Edit';
 
 import Grid from '@mui/material/Grid';
-import { Divider, Stack, Typography } from '@mui/material';
+import { Divider, Stack, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Field, Formik } from 'formik';
 import * as Yup from 'yup';
 import { useMutation, useQueryClient } from 'react-query';
@@ -20,11 +21,11 @@ import Switch from 'ui-component/switch';
 import { omit } from 'lodash';
 
 const validationSchema = Yup.object().shape({
-    firstName: Yup.string().required(),
-    lastName: Yup.string().required(),
-    username: Yup.string().required(),
-    branches: Yup.array().of(Yup.object()).required(),
-    role: Yup.object().required(),
+    firstName: Yup.string().required('First name is required'),
+    lastName: Yup.string().required('Last name is required'),
+    username: Yup.string().required('Username is required'),
+    branches: Yup.array().of(Yup.object()).min(1, 'At least one branch is required').required('At least one branch is required'),
+    role: Yup.object().required('Role is required'),
     isActive: Yup.bool()
 });
 
@@ -68,7 +69,12 @@ export default function ({ initialValues }) {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>Edit User</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Edit User
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
@@ -123,7 +129,7 @@ export default function ({ initialValues }) {
                             <DialogActions>
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Button disableElevation disabled={isSubmitting} onClick={submitForm} size="small" variant="contained">
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

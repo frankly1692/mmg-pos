@@ -7,7 +7,8 @@ import DialogTitle from '@mui/material/DialogTitle';
 import AddIcon from '@mui/icons-material/Add';
 
 import Grid from '@mui/material/Grid';
-import { Box, Divider, Stack, Typography } from '@mui/material';
+import { Box, Divider, Stack, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import { useMutation, useQueryClient } from 'react-query';
@@ -17,11 +18,11 @@ import { CashierReportWrapper, useCashierReport } from 'providers/CashierReportP
 import { useAuth } from 'providers/AuthProvider';
 
 const validationSchema = Yup.object().shape({
-    branch: Yup.object().required(),
-    amount: Yup.string().required(),
+    branch: Yup.object().required('Branch is required'),
+    amount: Yup.string().required('Amount is required'),
     referenceNumber: Yup.string(),
-    bankAccount: Yup.string().required(),
-    bankName: Yup.string().required(),
+    bankAccount: Yup.string().required('Bank account is required'),
+    bankName: Yup.string().required('Bank name is required'),
     bankCode: Yup.string(),
     bankAddress: Yup.string()
 });
@@ -55,6 +56,7 @@ const CreateDepositModal = () => CashierReportWrapper(function ({ disabled }) {
                         branch: branch,
                         amount: '',
                         referenceNumber: '',
+                        bankAccount: '',
                         bankName: '',
                         bankCode: '',
                         bankAddress: ''
@@ -72,7 +74,12 @@ const CreateDepositModal = () => CashierReportWrapper(function ({ disabled }) {
                 >
                     {({ handleSubmit, submitForm, isSubmitting, errors }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>New Sales Deposit</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                New Sales Deposit
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
@@ -123,7 +130,7 @@ const CreateDepositModal = () => CashierReportWrapper(function ({ disabled }) {
                                     Save & add Again
                                 </Button> */}
                                 <Button disableElevation disabled={isSubmitting} variant="contained" type="submit" onClick={submitForm}>
-                                    Save
+                                    {isSubmitting ? 'Saving...' : 'Save'}
                                 </Button>
                             </DialogActions>
                         </form>

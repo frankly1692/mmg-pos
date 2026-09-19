@@ -8,15 +8,16 @@ import AddIcon from '@mui/icons-material/Add';
 
 import Grid from '@mui/material/Grid';
 import { Box, Divider, IconButton, Stack, Typography } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import TextField from 'ui-component/TextField';
 
 export const CreateSalesDepositSchema = Yup.object().shape({
-    amount: Yup.number().min(1),
+    amount: Yup.number().min(1, 'Amount must be at least 1'),
     referenceNumber: Yup.string(),
-    bankAccount: Yup.string().required(),
-    bankName: Yup.string().required(),
+    bankAccount: Yup.string().required('Bank account is required'),
+    bankName: Yup.string().required('Bank name is required'),
     bankCode: Yup.string(),
     bankAddress: Yup.string()
 });
@@ -59,7 +60,12 @@ export default function ({ onSubmit }) {
                 >
                     {({ handleSubmit, submitForm, isSubmitting, errors }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>New Bank Deposit</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                New Bank Deposit
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
@@ -98,7 +104,7 @@ export default function ({ onSubmit }) {
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Box flex={1}></Box>
                                 <Button disableElevation disabled={isSubmitting} variant="contained" type="submit" onClick={submitForm}>
-                                    Save
+                                    {isSubmitting ? 'Saving...' : 'Save'}
                                 </Button>
                             </DialogActions>
                         </form>

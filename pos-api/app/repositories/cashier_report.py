@@ -83,10 +83,19 @@ class CashierReportRepository(Repository):
                 {
                     "$lookup": {
                         "from": self._transaction_collection,
+                        # Matched by the shift's actual [timeIn, timeOut] window, not by calendar
+                        # `date` equality — a shift crossing midnight (time-in 23:30, time-out
+                        # 00:20) has sales on two different calendar dates, but is still one shift
+                        # that should show up as one X-Reading. timeIn/timeOut and a transaction's
+                        # transactionDate are all ISO 8601 strings from the same fixed-offset
+                        # timezone (getLocalTimeStr — app/utils/utils.py), so they compare
+                        # correctly as plain strings. timeOut is null for a shift still in
+                        # progress, in which case there's no upper bound yet.
                         "let": {
                             "branchId": "$branchId",
                             "cashierId": "$cashierId",
-                            "date": "$date"
+                            "timeIn": "$timeIn",
+                            "timeOut": "$timeOut"
                         },
                         "pipeline": [
                             {
@@ -95,7 +104,11 @@ class CashierReportRepository(Repository):
                                         "$and": [
                                             { "$eq": ["$branchId", "$$branchId"] },
                                             { "$eq": ["$cashierId", "$$cashierId"] },
-                                            { "$eq": ["$date", "$$date"] },
+                                            { "$gte": ["$transactionDate", "$$timeIn"] },
+                                            { "$or": [
+                                                { "$eq": ["$$timeOut", None] },
+                                                { "$lte": ["$transactionDate", "$$timeOut"] },
+                                            ]},
                                         ]
                                     }
                                 }
@@ -107,10 +120,12 @@ class CashierReportRepository(Repository):
                 {
                     "$lookup": {
                         "from": self._transaction_collection,
+                        # Same shift-window matching as the "transactions" lookup above.
                         "let": {
                             "branchId": "$branchId",
                             "cashierId": "$cashierId",
-                            "date": "$date"
+                            "timeIn": "$timeIn",
+                            "timeOut": "$timeOut"
                         },
                         "pipeline": [
                             {
@@ -119,7 +134,11 @@ class CashierReportRepository(Repository):
                                         "$and": [
                                             { "$eq": ["$branchId", "$$branchId"] },
                                             { "$eq": ["$cashierId", "$$cashierId"] },
-                                            { "$eq": ["$date", "$$date"] },
+                                            { "$gte": ["$transactionDate", "$$timeIn"] },
+                                            { "$or": [
+                                                { "$eq": ["$$timeOut", None] },
+                                                { "$lte": ["$transactionDate", "$$timeOut"] },
+                                            ]},
                                             { "$in": [ "$status", ['completed', 'refunded'] ]}
                                         ]
                                     }
@@ -144,10 +163,14 @@ class CashierReportRepository(Repository):
                 {
                     "$lookup": {
                         "from": self._transaction_discount_collection,
+                        # transaction_discounts only carries a coarse `date` (no time-of-day), so
+                        # the shift-window test below runs after joining to the full transaction
+                        # and reading ITS transactionDate, same as the two lookups above.
                         "let": {
                             "branchId": "$branchId",
                             "cashierId": "$cashierId",
-                            "date": "$date"
+                            "timeIn": "$timeIn",
+                            "timeOut": "$timeOut"
                         },
                         "pipeline": [
                             {
@@ -156,7 +179,6 @@ class CashierReportRepository(Repository):
                                         "$and": [
                                             { "$eq": ["$branchId", "$$branchId"] },
                                             { "$eq": ["$cashierId", "$$cashierId"] },
-                                            { "$eq": ["$date", "$$date"] },
                                         ]
                                     }
                                 },
@@ -166,15 +188,28 @@ class CashierReportRepository(Repository):
                                     "transactionId": {"$toObjectId": "$transactionId"}
                                 }
                             },
-                            { 
+                            {
                                 '$lookup': {
                                     'from': self._transaction_collection,
                                     'localField': 'transactionId',
                                     'foreignField': '_id',
                                     'as': 'transaction'
-                                }, 
+                                },
                             },
                             { "$unwind": "$transaction" },
+                            {
+                                "$match": {
+                                    "$expr": {
+                                        "$and": [
+                                            { "$gte": ["$transaction.transactionDate", "$$timeIn"] },
+                                            { "$or": [
+                                                { "$eq": ["$$timeOut", None] },
+                                                { "$lte": ["$transaction.transactionDate", "$$timeOut"] },
+                                            ]},
+                                        ]
+                                    }
+                                }
+                            },
                             {
                                 '$project': {
                                     "_id": 0,

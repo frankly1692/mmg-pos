@@ -7,7 +7,8 @@ import DialogTitle from '@mui/material/DialogTitle';
 import EditIcon from '@mui/icons-material/Edit';
 
 import Grid from '@mui/material/Grid';
-import { Divider, Stack, Typography } from '@mui/material';
+import { Divider, Stack, Typography, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { Field, Formik } from 'formik';
 import * as Yup from 'yup';
 import { useMutation, useQueryClient } from 'react-query';
@@ -16,12 +17,12 @@ import TextField from 'ui-component/TextField';
 import Switch from 'ui-component/switch';
 
 const validationSchema = Yup.object().shape({
-    fullAddress: Yup.string().required(),
-    name: Yup.string().required(),
+    streetAddress: Yup.string().required('Address is required'),
+    name: Yup.string().required('Name is required'),
     // city: Yup.string().required(),
     // postalCode: Yup.string().required(),
     // state: Yup.string().required(),
-    tin: Yup.string().required(),
+    tin: Yup.string().required('TIN is required'),
     contactNumber: Yup.string(),
     emailAddress: Yup.string(),
     // isActive: Yup.bool()
@@ -63,7 +64,12 @@ export default function ({ initialValues }) {
                 >
                     {({ handleSubmit, submitForm, isSubmitting, errors }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem' }}>Edit Branch</DialogTitle>
+                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                Edit Branch
+                                <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
@@ -86,15 +92,15 @@ export default function ({ initialValues }) {
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={9}>
-                                        <TextField 
+                                        <TextField
                                             multiline
                                             rows={3}
                                             maxRows={3}
-                                            name="fullAddress" 
-                                            placeholder="Full Address" 
+                                            name="streetAddress"
+                                            placeholder="Full Address"
                                         />
                                         {/* <Stack spacing={2}>
-                                            <TextField name="fullAddress" placeholder="Street Address" />
+                                            <TextField name="streetAddress" placeholder="Street Address" />
                                             <TextField name="city" placeholder="City" />
                                             <Stack direction="row" width="100%" spacing={1}>
                                                 <TextField name="state" placeholder="State" />
@@ -130,7 +136,7 @@ export default function ({ initialValues }) {
                             <DialogActions>
                                 <Button onClick={handleClose}>Cancel</Button>
                                 <Button disableElevation disabled={isSubmitting} onClick={submitForm} size="small" variant="contained">
-                                    Submit
+                                    {isSubmitting ? 'Saving...' : 'Submit'}
                                 </Button>
                             </DialogActions>
                         </form>

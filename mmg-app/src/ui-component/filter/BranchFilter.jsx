@@ -23,9 +23,7 @@ export default memo(({ filter, onChange, values, options, setValues, ...otherPro
             sx={{ minWidth: 150 }}
             {...otherProps}
         >
-            <MenuItem value={DEFAULT_BRANCH_FILTER}>
-                <em>All</em>
-            </MenuItem>
+            <MenuItem value={DEFAULT_BRANCH_FILTER}>All</MenuItem>
             {options
                 ? options.map((option) => (
                       <MenuItem key={option} value={option}>

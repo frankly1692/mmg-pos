@@ -211,6 +211,21 @@ class CreateTransaction(BaseTransaction):
     cashierId: str
     referredById: Optional[str] = None
     requestedById: Optional[str] = None
+    # Accredited terminal identifier (PTU_NO from the workstation's terminal.json). Invoice
+    # numbers are sequential per PTU (BIR rule) — required whenever this transaction is being
+    # completed, since that's the only point an invoice number gets issued.
+    ptuNumber: Optional[str] = None
+    # Client-generated key (one per Pay/Hold click), unique across new_transactions (see
+    # app/database/indexes.py: unique_idempotency_key). Lets a double-click or a retried request
+    # after a dropped response be recognized as the same submission instead of creating a second
+    # transaction and burning a second invoice number.
+    idempotencyKey: Optional[str] = None
+
+    @model_validator(mode='after')
+    def requirePtuNumberWhenCompleted(self):
+        if self.status == TransactionStatus.COMPLETED and not self.ptuNumber:
+            raise ValueError('ptuNumber is required to complete a transaction (invoice numbers are issued per accredited terminal)')
+        return self
 
 class CreateChequeTransaction(CreateTransaction):
     tender: Optional[ChequeTender] = None
@@ -243,6 +258,10 @@ class CreateCancelledTransaction(BaseModel):
     invoiceNumber: int
     transactionNumber: Optional[int] = None
     status: TransactionStatus
+    # PTU of the terminal issuing this cancel/refund document — not necessarily the same
+    # terminal that issued the original invoice. Cancel/refund serial numbers are sequential
+    # per accredited terminal (BIR rule), same as invoice numbers.
+    ptuNumber: str
 
 class CreateRefundTransaction(CreateTransaction):
     reason: Optional[str] = None

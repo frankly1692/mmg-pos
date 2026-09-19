@@ -45,6 +45,12 @@ class Repository(abc.ABC):
             return self._db[self._collection].insert_many(data)
         except:
             raise
+
+    def delete_many(self, query):
+        try:
+            return self._db[self._collection].delete_many(query)
+        except:
+            raise
     
     def update_many(self, query, data:BaseModel, *args, **kwargs):
         data = data.model_dump(exclude_none=True)

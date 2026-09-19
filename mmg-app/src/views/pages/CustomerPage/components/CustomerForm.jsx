@@ -227,7 +227,7 @@ const CustomerForm = () => {
             toast.error('Error creating customer.');
         },
         onSuccess: () => {
-            toast.success('Customer created successfully.');
+            toast.success('Customer created successfully.', { autoClose: 1500 });
             handleNavigation();
         },
         onSettled: () => {
@@ -254,7 +254,7 @@ const CustomerForm = () => {
             toast.error('Error editing customer.');
         },
         onSuccess: () => {
-            toast.success('Customer edited successfully.');
+            toast.success('Customer edited successfully.', { autoClose: 1500 });
             handleNavigation();
         },
         onSettled: () => {

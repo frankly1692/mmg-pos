@@ -20,20 +20,19 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from 'providers/AuthProvider';
 import FooterWatermark from 'ui-component/FooterWatermark';
 import ConnectionSection from 'layout/MainLayout/Header/ConnectionSection';
+import useServerConnection from 'hooks/useServerConnection';
 
 const validationSchema = Yup.object().shape({
     username: Yup.string().max(255).required('Username is required'),
     password: Yup.string().max(255).required('Password is required')
 });
 
-const APP_ENV = import.meta.env.VITE_APP_ENV
-
 const Login = () => {
     const { loginUser } = useAuth();
     const { state } = useLocation();
     const redirect = state?.redirect;
 
-    const isInternalProduction = APP_ENV == 'internal-production'
+    const isConnected = useServerConnection();
 
     const theme = useTheme();
     const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +51,7 @@ const Login = () => {
         <Grid container justifyContent="center" alignItems="center" sx={{ minHeight: 'calc(100vh - 68px)' }}>
             <Grid item sx={{ m: { xs: 1, sm: 3 }, mb: 0 }}>
                 <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                    <ConnectionSection isConnected={!isInternalProduction} />
+                    <ConnectionSection isConnected={isConnected} />
                 </div>
                 <AuthCardWrapper>
                     <Grid container spacing={2} alignItems="center" justifyContent="center">

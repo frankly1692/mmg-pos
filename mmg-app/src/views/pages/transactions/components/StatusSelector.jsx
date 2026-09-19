@@ -42,6 +42,7 @@ export default function () {
                         )
                     }}
                     error={Boolean(error && touched)}
+                    helperText={touched ? error : undefined}
                 />
             )}
         />
