@@ -1,11 +1,9 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Typography,
     Grid,
     Card,
-    CardContent,
-    CardActions,
     Button,
     Table,
     TableBody,
@@ -13,74 +11,80 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     TextField,
     Stack,
     IconButton,
     Chip,
-    Select,
-    OutlinedInput,
-    InputAdornment,
+    Box,
     MenuItem,
     CircularProgress,
     TablePagination,
     Divider,
-    Box
+    ToggleButton,
+    ToggleButtonGroup
 } from '@mui/material';
-import { MdDashboard, MdTableChart } from 'react-icons/md';
 import service from 'api/service';
 import category from 'api/category';
 import { useQuery } from 'react-query';
-import { debounce } from 'lodash';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import TableRowsOutlinedIcon from '@mui/icons-material/TableRowsOutlined';
 import TrendingUpOutlinedIcon from '@mui/icons-material/TrendingUpOutlined';
-import { FaPesoSign } from 'react-icons/fa6';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import { CSVLink } from 'react-csv';
+import moment from 'moment';
 
-const GRID_ITEMS_PER_PAGE = 12;
+const SORT_OPTIONS = [
+    { value: 'name-asc', label: 'Name (A-Z)' },
+    { value: 'name-desc', label: 'Name (Z-A)' },
+    { value: 'price-asc', label: 'Price (Low-High)' },
+    { value: 'price-desc', label: 'Price (High-Low)' }
+];
+
+// Deterministic color per category (by id) so the same category always renders the same chip
+// color across grid/table views and page reloads.
+const stringToChipColor = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str?.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return { bg: `hsl(${hue}, 70%, 92%)`, color: `hsl(${hue}, 55%, 38%)` };
+};
+
+const formatCurrency = (value) => `₱${new Intl.NumberFormat().format(value || 0)}`;
 
 const ProductList = ({ mode }) => {
     const navigate = useNavigate();
-    const [selectedProduct, setSelectedProduct] = useState(null);
-    const [viewMode, setViewMode] = useState('card');
-    const [searchInput, setSearchInput] = useState('');
+    const [viewMode, setViewMode] = useState('table');
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('all');
+    const [sortBy, setSortBy] = useState('name-asc');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [userRole, setUserRole] = useState([]);
 
-    const { data: services, isLoading, isError, error } = useQuery('services', () => service.GetAllServices().then(data => data.sort((a, b) => a.name.localeCompare(b.name))));
-    const { data: categories } = useQuery('categories', () => category.GetAllCategories().then(data => data.filter(cat => cat.isActive).sort((a, b) => a.name.localeCompare(b.name))));
+    const { data: services, isLoading } = useQuery('services', () =>
+        service.GetAllServices().then((data) => data.sort((a, b) => a.name.localeCompare(b.name)))
+    );
+    const { data: categories } = useQuery('categories', () =>
+        category.GetAllCategories().then((data) => data.filter((cat) => cat.isActive).sort((a, b) => a.name.localeCompare(b.name)))
+    );
 
     // Retrieve user role from session storage
     useEffect(() => {
         const role = JSON.parse(localStorage.getItem('session'));
         setUserRole(role);
     }, []);
-
-    const handleSwitchView = (mode) => {
-        setViewMode(mode);
-        setPage(0);
-    };
-
-    const debouncedSetSearchQuery = useRef(debounce((value) => setSearchQuery(value), 300)).current;
+    const isAdmin = userRole?.role?.name === 'admin';
 
     const handleSearch = (event) => {
-        setSearchInput(event.target.value);
+        setSearchQuery(event.target.value);
         setPage(0);
-        debouncedSetSearchQuery(event.target.value);
-    };
-
-    const handleClearSearch = () => {
-        setSearchInput('');
-        setSearchQuery('');
-        setPage(0);
-        debouncedSetSearchQuery.cancel();
     };
 
     const handleCategoryChange = (event) => {
@@ -89,13 +93,10 @@ const ProductList = ({ mode }) => {
     };
 
     const handleNewProduct = () => {
-        // Redirect to the service form route when "New Product" button is clicked
         navigate('/dashboard/labtest/new');
     };
 
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
+    const handleChangePage = (event, newPage) => setPage(newPage);
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
@@ -103,348 +104,371 @@ const ProductList = ({ mode }) => {
     };
 
     const handleEditProduct = (id) => {
-        const service = services.find((p) => p._id === id);
-        if (service) {
-            // Extract the category id
-            const categoryId = service.category?.id;
-
-            // Create a new object with the category id instead of the entire category object
-            const serviceWithCategoryId = {
-                ...service,
-                categoryId: categoryId
-            };
-
-            setSelectedProduct(serviceWithCategoryId);
+        const found = services.find((p) => p._id === id);
+        if (found) {
+            const categoryId = found.category?.id;
+            const serviceWithCategoryId = { ...found, categoryId };
             const encodedProduct = encodeURIComponent(JSON.stringify(serviceWithCategoryId));
             navigate(`/dashboard/labtest/edit?product=${encodedProduct}`);
         }
     };
 
     const filteredProducts = useMemo(() => {
-        const lowerCaseSearchQuery = searchQuery?.toLowerCase();
+        const query = searchQuery.toLowerCase();
+        const filtered = (services || []).filter(
+            (product) =>
+                (product?.name?.toLowerCase().includes(query) ||
+                    product?.sku?.toLowerCase().includes(query) ||
+                    product?.category?.name?.toLowerCase().includes(query)) &&
+                (selectedCategory === 'all' || product?.category?.id === selectedCategory)
+        );
 
-        return (
-            services?.filter(
-                (product) =>
-                    product?.name?.toLowerCase()?.includes(lowerCaseSearchQuery) &&
-                    (selectedCategory === '' || product?.category?.id === selectedCategory)
-            ) || []
-        ); // Return an empty array if services is null or undefined
-    }, [services, searchQuery, selectedCategory]);
-
-    const uniqueCategories = useMemo(() => {
-        // Create a map to keep track of unique categories by name
-        const categoryMap = new Map();
-
-        // Iterate over the categories and add them to the map if they are not already present
-        categories?.forEach((category) => {
-            if (!categoryMap.has(category.name)) {
-                categoryMap.set(category.name, { id: category._id, name: category.name });
+        const [field, direction] = sortBy.split('-');
+        const sorted = [...filtered].sort((a, b) => {
+            let result = 0;
+            if (field === 'name') {
+                result = a.name.localeCompare(b.name);
+            } else if (field === 'price') {
+                result = (a.price || 0) - (b.price || 0);
             }
+            return direction === 'desc' ? -result : result;
         });
 
-        // Convert the map values to an array
+        return sorted;
+    }, [services, searchQuery, selectedCategory, sortBy]);
+
+    const csvData = useMemo(
+        () =>
+            filteredProducts.map((p) => ({
+                Code: p.sku,
+                Name: p.name,
+                Category: p.category?.name,
+                Description: p.description,
+                Price: p.no_price ? 'No set price' : p.price
+            })),
+        [filteredProducts]
+    );
+
+    const uniqueCategories = useMemo(() => {
+        const categoryMap = new Map();
+        categories?.forEach((cat) => {
+            if (!categoryMap.has(cat.name)) categoryMap.set(cat.name, { id: cat._id, name: cat.name });
+        });
         return Array.from(categoryMap.values());
     }, [categories]);
 
-    const renderWrapper = (children) => (
-        <div>
-            <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                justifyContent="space-between"
-                spacing={2}
-                mb={3}
-            >
-                <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    alignItems={{ xs: 'stretch', sm: 'center' }}
-                    spacing={1.5}
-                    sx={{
-                        p: 1,
-                        borderRadius: 2,
-                        bgcolor: 'grey.50',
-                        border: '1px solid',
-                        borderColor: 'grey.200'
-                    }}
-                >
-                    <TextField
-                        placeholder="Search by name"
-                        variant="outlined"
-                        value={searchInput}
-                        onChange={handleSearch}
-                        size="small"
-                        sx={{ minWidth: { sm: 240 }, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.paper' } }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon fontSize="small" color="action" />
-                                </InputAdornment>
-                            ),
-                            endAdornment: searchInput && (
-                                <InputAdornment position="end">
-                                    <IconButton size="small" onClick={handleClearSearch} edge="end" aria-label="Clear search">
-                                        <ClearIcon fontSize="small" />
-                                    </IconButton>
-                                </InputAdornment>
-                            )
-                        }}
-                    />
-                    <Select
-                        value={selectedCategory}
-                        onChange={handleCategoryChange}
-                        displayEmpty
-                        size="small"
-                        sx={{ minWidth: { sm: 190 }, borderRadius: 2, bgcolor: 'background.paper' }}
-                        input={
-                            <OutlinedInput
-                                startAdornment={
-                                    <InputAdornment position="start">
-                                        <FilterAltIcon fontSize="small" color="action" />
-                                    </InputAdornment>
-                                }
-                            />
-                        }
-                    >
-                        <MenuItem value="">All Categories</MenuItem>
-                        {uniqueCategories?.map((category) => (
-                            <MenuItem key={category?.id} value={category?.id}>
-                                {category.name}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </Stack>
-                <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={1}>
-                    {viewMode === 'table' ? (
-                        <Button
-                            variant="outlined"
-                            onClick={() => handleSwitchView('card')}
-                            startIcon={<MdDashboard style={{ marginRight: '3px' }} />}
-                        >
-                            View in Grid
+    const paginated = filteredProducts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+    const renderPrice = (product) =>
+        product?.no_price ? (
+            <Chip label="No set price" size="small" variant="outlined" />
+        ) : (
+            <Typography variant="subtitle1" fontWeight={700}>
+                {formatCurrency(product.price)}
+            </Typography>
+        );
+
+    const renderCategoryChip = (product) => {
+        if (!product?.category?.name) return null;
+        const style = stringToChipColor(product.category.id || product.category.name);
+        return <Chip label={product.category.name} size="small" sx={{ bgcolor: style.bg, color: style.color, fontWeight: 500 }} />;
+    };
+
+    const renderHeader = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Typography variant="h2" fontWeight={600}>
+                            Diagnostics
+                        </Typography>
+                        <Chip
+                            size="small"
+                            label={`${(services?.length || 0).toLocaleString()} Available`}
+                            sx={{ bgcolor: 'primary.light', color: 'primary.dark', fontWeight: 500 }}
+                        />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" mt={0.5}>
+                        Manage laboratory diagnostic tests, pricing, procedures, tariffs, and cost breakdowns.
+                    </Typography>
+                </Box>
+                <Stack direction="row" spacing={1.5}>
+                    <CSVLink data={csvData} filename={`lab-tests-export-${moment().format('YYYY-MM-DD')}.csv`} style={{ textDecoration: 'none' }}>
+                        <Button variant="outlined" color="inherit" startIcon={<DescriptionOutlinedIcon />}>
+                            Export CSV
                         </Button>
-                    ) : (
-                        <Button
-                            variant="outlined"
-                            onClick={() => handleSwitchView('table')}
-                            startIcon={<MdTableChart style={{ marginRight: '3px' }} />}
-                        >
-                            View in List
-                        </Button>
-                    )}
-                    {userRole?.role?.name === 'admin' && (
+                    </CSVLink>
+                    {isAdmin && (
                         <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleNewProduct}>
-                            New Item
+                            New Test
                         </Button>
                     )}
                 </Stack>
-            </Stack>
-            {children}
-        </div>
+            </Box>
+        </Card>
     );
 
-    const renderCardView = (children) =>
-        renderWrapper(
-            children ?? (
-                <div>
-                    <Grid container spacing={2}>
-                        {filteredProducts
-                            ?.slice(page * GRID_ITEMS_PER_PAGE, page * GRID_ITEMS_PER_PAGE + GRID_ITEMS_PER_PAGE)
-                            ?.map((product) => (
+    const renderFilters = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flex={1}>
+                        <TextField
+                            size="small"
+                            placeholder="Search by test name, code, or category..."
+                            value={searchQuery}
+                            onChange={handleSearch}
+                            sx={{ flex: 1, minWidth: 260 }}
+                            InputProps={{
+                                startAdornment: <SearchIcon fontSize="small" color="action" sx={{ mr: 1 }} />,
+                                endAdornment: searchQuery ? (
+                                    <IconButton size="small" onClick={() => setSearchQuery('')}>
+                                        <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                ) : null
+                            }}
+                        />
+                        <TextField select size="small" value={selectedCategory} onChange={handleCategoryChange} sx={{ minWidth: 190 }}>
+                            <MenuItem value="all">All Categories</MenuItem>
+                            {uniqueCategories.map((cat) => (
+                                <MenuItem key={cat.id} value={cat.id}>
+                                    {cat.name}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Stack>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="body2" color="text.secondary" whiteSpace="nowrap">
+                                Sort by:
+                            </Typography>
+                            <TextField
+                                select
+                                size="small"
+                                variant="standard"
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                InputProps={{ disableUnderline: true }}
+                                sx={{ minWidth: 150 }}
+                            >
+                                {SORT_OPTIONS.map((option) => (
+                                    <MenuItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Stack>
+                        <ToggleButtonGroup
+                            exclusive
+                            size="small"
+                            value={viewMode}
+                            onChange={(e, value) => {
+                                if (value) {
+                                    setViewMode(value);
+                                    setPage(0);
+                                }
+                            }}
+                        >
+                            <ToggleButton value="card">
+                                <GridViewOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} />
+                                Grid View
+                            </ToggleButton>
+                            <ToggleButton value="table">
+                                <TableRowsOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} />
+                                Table View
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Stack>
+                </Stack>
+            </Box>
+        </Card>
+    );
+
+    const renderPagination = () => (
+        <TablePagination
+            component="div"
+            count={filteredProducts.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+        />
+    );
+
+    const renderEmptyState = () => (
+        <Stack alignItems="center" py={6}>
+            <Typography color="text.secondary" variant="h5">
+                No lab tests to display. Try checking your filters
+            </Typography>
+        </Stack>
+    );
+
+    const renderCardView = () => (
+        <Card sx={{ overflow: 'hidden' }}>
+            <Box sx={{ p: 3 }}>
+                {paginated.length === 0 ? (
+                    renderEmptyState()
+                ) : (
+                    <Grid container spacing={2.5}>
+                        {paginated.map((product) => (
                             <Grid item key={product._id} xs={12} sm={6} md={4} lg={3}>
-                                <Card
-                                    style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F5F5F7' }}
-                                    variant="outlined"
-                                >
-                                    <CardContent style={{ flex: '1 1 auto' }}>
-                                        <Stack direction="column" justifyContent="flex-start" alignItems="flex-start" spacing={1.25}>
-                                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                                {product?.category?.name && (
-                                                    <Chip label={product.category.name} size="small" variant="outlined" color="primary" />
-                                                )}
-                                                {product?.sku && (
-                                                    <Chip
-                                                        icon={<Inventory2OutlinedIcon fontSize="small" />}
-                                                        label={product.sku}
-                                                        size="small"
-                                                        variant="outlined"
-                                                    />
-                                                )}
-                                            </Stack>
-                                            <Box>
-                                                <Typography
-                                                    variant="h3"
-                                                    component="div"
-                                                    sx={{
-                                                        display: '-webkit-box',
-                                                        WebkitLineClamp: 2,
-                                                        WebkitBoxOrient: 'vertical',
-                                                        overflow: 'hidden'
-                                                    }}
-                                                >
-                                                    {product?.name}
-                                                </Typography>
-                                                {product?.description && (
-                                                    <Typography
-                                                        variant="body2"
-                                                        color="text.secondary"
-                                                        sx={{
-                                                            mt: 0.5,
-                                                            display: '-webkit-box',
-                                                            WebkitLineClamp: 2,
-                                                            WebkitBoxOrient: 'vertical',
-                                                            overflow: 'hidden'
-                                                        }}
-                                                    >
-                                                        {product.description}
-                                                    </Typography>
-                                                )}
-                                            </Box>
-                                            <Divider sx={{ width: '100%' }} />
-                                            {product?.no_price ? (
-                                                <Chip label="No set price" size="small" variant="outlined" />
-                                            ) : (
-                                                <Typography variant="h4" sx={{ display: 'flex', alignItems: 'center' }}>
-                                                    <FaPesoSign style={{ fontSize: '0.75rem', marginRight: 3 }} />
-                                                    {new Intl.NumberFormat().format(product?.price || 0)}
-                                                </Typography>
-                                            )}
-                                            {product?.transaction_count > 0 && (
-                                                <Stack direction="row" spacing={0.75} alignItems="center">
-                                                    <TrendingUpOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                                    <Typography variant="body2" color="text.secondary">
-                                                        Ordered {product.transaction_count} time{product.transaction_count === 1 ? '' : 's'}
-                                                    </Typography>
-                                                </Stack>
-                                            )}
+                                <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                    <Box sx={{ p: 2.5, flex: 1 }}>
+                                        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap mb={1.5}>
+                                            {renderCategoryChip(product)}
+                                            {product?.sku && <Chip label={product.sku} size="small" variant="outlined" />}
                                         </Stack>
-                                    </CardContent>
-                                    {userRole?.role?.name === 'admin' && (
-                                        <CardActions style={{ flexShrink: 0 }}>
-                                            <Stack direction="row" justifyContent="flex-end" sx={{ width: '100%' }}>
-                                                <Button
-                                                    variant="outlined"
-                                                    size="small"
-                                                    sx={{ borderColor: 'grey.400', backgroundColor: 'white' }}
-                                                    onClick={() => handleEditProduct(product._id)}
-                                                    startIcon={<EditIcon />}
-                                                >
-                                                    Edit
-                                                </Button>
+                                        <Typography
+                                            variant="subtitle1"
+                                            fontWeight={700}
+                                            sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                                        >
+                                            {product?.name}
+                                        </Typography>
+                                        {product?.description && (
+                                            <Typography
+                                                variant="body2"
+                                                color="text.secondary"
+                                                sx={{
+                                                    mt: 0.5,
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                {product.description}
+                                            </Typography>
+                                        )}
+                                        <Divider sx={{ my: 1.5 }} />
+                                        {renderPrice(product)}
+                                        {product?.transaction_count > 0 && (
+                                            <Stack direction="row" spacing={0.75} alignItems="center" mt={1}>
+                                                <TrendingUpOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                                <Typography variant="body2" color="text.secondary">
+                                                    Ordered {product.transaction_count} time{product.transaction_count === 1 ? '' : 's'}
+                                                </Typography>
                                             </Stack>
-                                        </CardActions>
+                                        )}
+                                    </Box>
+                                    {isAdmin && (
+                                        <Box sx={{ p: 2, pt: 0 }}>
+                                            <Button
+                                                variant="outlined"
+                                                fullWidth
+                                                startIcon={<EditIcon fontSize="small" />}
+                                                onClick={() => handleEditProduct(product._id)}
+                                            >
+                                                Edit
+                                            </Button>
+                                        </Box>
                                     )}
                                 </Card>
                             </Grid>
                         ))}
                     </Grid>
-                    <div style={{ flex: '0 1 auto' }}>
-                        <TablePagination
-                            component="div"
-                            count={filteredProducts?.length}
-                            page={page}
-                            onPageChange={handleChangePage}
-                            rowsPerPage={GRID_ITEMS_PER_PAGE}
-                            rowsPerPageOptions={[GRID_ITEMS_PER_PAGE]}
-                        />
-                    </div>
-                </div>
-            )
-        );
-
-    const renderTableView = (children) =>
-        renderWrapper(
-            <div>
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Category</TableCell>
-                                <TableCell>Description</TableCell>
-                                <TableCell>Inventory Prerequisite</TableCell>
-                                <TableCell>Price</TableCell>
-                                {mode != 'view' && <TableCell>Action</TableCell>}
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {filteredProducts?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((product) => (
-                                <TableRow key={product._id}>
-                                    <TableCell>{product.name}</TableCell>
-                                    <TableCell>
-                                        <Chip label={product?.category?.name} size="small" variant="outlined" color="secondary" />
-                                    </TableCell>
-                                    <TableCell dangerouslySetInnerHTML={{ __html: product.description }} />
-                                    <TableCell>
-                                        <ul>
-                                            {product.inventoryPrerequisite?.map((prerequisite) => (
-                                                <li
-                                                    key={prerequisite.id}
-                                                >{`SKU: ${prerequisite.id}, Quantity: ${prerequisite.quantity}`}</li>
-                                            ))}
-                                        </ul>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Stack direction="row" alignItems="center">
-                                            <FaPesoSign fontSize={17} />
-                                            {new Intl.NumberFormat().format(product?.price)}
-                                        </Stack>
-                                    </TableCell>
-                                    {mode != 'view' && (
-                                        <TableCell>
-                                            <Button
-                                                variant="outlined"
-                                                size="small"
-                                                color="primary"
-                                                onClick={() => handleEditProduct(product._id)}
-                                                startIcon={<EditIcon />}
-                                            >
-                                                Edit
-                                            </Button>
-                                        </TableCell>
-                                    )}
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {children}
-                </TableContainer>
-                <div style={{ flex: '0 1 auto' }}>
-                    <TablePagination
-                        component="div"
-                        count={filteredProducts?.length}
-                        page={page}
-                        onPageChange={handleChangePage}
-                        rowsPerPage={rowsPerPage}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                    />
-                </div>
-            </div>
-        );
-
-    const renderMessage = (children) => (
-        <Stack alignItems="center" my={4}>
-            {children}
-        </Stack>
+                )}
+            </Box>
+            {renderPagination()}
+        </Card>
     );
 
-    const renderView = viewMode === 'card' ? renderCardView : renderTableView;
+    const renderTableView = () => (
+        <Card sx={{ overflow: 'hidden' }}>
+            <TableContainer>
+                <Table>
+                    <TableHead>
+                        <TableRow sx={{ bgcolor: 'grey.50' }}>
+                            {['Test Name', 'Category', 'Description', 'Price', ...(mode !== 'view' ? ['Action'] : [])].map((head) => (
+                                <TableCell
+                                    key={head}
+                                    align={head === 'Action' ? 'right' : 'left'}
+                                    sx={{ fontSize: '0.75rem', fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5 }}
+                                >
+                                    {head.toUpperCase()}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {paginated.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={mode !== 'view' ? 5 : 4}>{renderEmptyState()}</TableCell>
+                            </TableRow>
+                        )}
+                        {paginated.map((product) => (
+                            <TableRow key={product._id} hover>
+                                <TableCell>
+                                    <Typography variant="body2" fontWeight={600}>
+                                        {product.name}
+                                    </Typography>
+                                    {product?.sku && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            {product.sku}
+                                        </Typography>
+                                    )}
+                                </TableCell>
+                                <TableCell>{renderCategoryChip(product)}</TableCell>
+                                <TableCell sx={{ maxWidth: 320 }}>
+                                    <Typography variant="body2" color="text.secondary" dangerouslySetInnerHTML={{ __html: product.description }} />
+                                </TableCell>
+                                <TableCell>{renderPrice(product)}</TableCell>
+                                {mode !== 'view' && (
+                                    <TableCell align="right">
+                                        {isAdmin && (
+                                            <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                                                <Button
+                                                    onClick={() => handleEditProduct(product._id)}
+                                                    startIcon={<EditIcon fontSize="small" />}
+                                                    variant="outlined"
+                                                    size="small"
+                                                >
+                                                    Edit
+                                                </Button>
+                                                <IconButton size="small">
+                                                    <MoreVertIcon fontSize="small" />
+                                                </IconButton>
+                                            </Stack>
+                                        )}
+                                    </TableCell>
+                                )}
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+            {renderPagination()}
+        </Card>
+    );
+
+    // mode="view" is the compact picker embedded in the POS drawer (PosComponent.jsx) — the
+    // dashboard-style title/subtitle/Export/New Test header belongs only on the full admin page.
+    const isEmbeddedPicker = mode === 'view';
 
     if (isLoading) {
-        return renderView(renderMessage(<CircularProgress size={28} />));
-    }
-
-    if (!filteredProducts || filteredProducts.length === 0) {
-        return renderView(
-            renderMessage(
-                <Typography color="lightgray" variant="h5">
-                    No available data to display. Try checking your filters
-                </Typography>
-            )
+        return (
+            <Stack spacing={2.5}>
+                {isEmbeddedPicker ? (
+                    <Typography variant="h3">Diagnostics</Typography>
+                ) : (
+                    renderHeader()
+                )}
+                {renderFilters()}
+                <Stack alignItems="center" py={6}>
+                    <CircularProgress size={28} />
+                </Stack>
+            </Stack>
         );
     }
 
-    return renderView();
+    return (
+        <Stack spacing={2.5}>
+            {isEmbeddedPicker ? <Typography variant="h3">Diagnostics</Typography> : renderHeader()}
+            {renderFilters()}
+            {viewMode === 'card' ? renderCardView() : renderTableView()}
+        </Stack>
+    );
 };
 
 export default ProductList;

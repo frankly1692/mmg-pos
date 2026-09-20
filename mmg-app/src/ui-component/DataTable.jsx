@@ -34,14 +34,23 @@ export default function DataTable({
     const cellSx = (col) => ({ ...(dense && { py: 0.5 }), ...(col.nowrap && { textWrap: 'nowrap' }) });
 
     return (
-        <Card sx={{ borderRadius: 2 }}>
-            <TableContainer component={Paper}>
+        <Card sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            <TableContainer component={Paper} sx={{ boxShadow: 'none' }}>
                 <Table size={dense ? 'small' : 'medium'} sx={{ minWidth: 650, borderBottom: 1, borderColor: 'grey.100' }}>
                     <TableHead>
-                        <TableRow>
+                        <TableRow sx={{ bgcolor: 'grey.50' }}>
                             {columns.map((col) => (
-                                <TableCell key={col.key} width={col.width} align={col.align} sx={cellSx(col)}>
-                                    {typeof col.header === 'function' ? col.header({ isRefetching }) : col.header}
+                                <TableCell
+                                    key={col.key}
+                                    width={col.width}
+                                    align={col.align}
+                                    sx={{ ...cellSx(col), fontSize: '0.75rem', fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5 }}
+                                >
+                                    {typeof col.header === 'function'
+                                        ? col.header({ isRefetching })
+                                        : typeof col.header === 'string'
+                                          ? col.header.toUpperCase()
+                                          : col.header}
                                 </TableCell>
                             ))}
                         </TableRow>
@@ -60,7 +69,7 @@ export default function DataTable({
                             <TableRow>
                                 <TableCell colSpan={columns.length}>
                                     <Stack alignItems="center" my={4}>
-                                        <Typography color="lightgray" variant="h5">
+                                        <Typography color="text.secondary" variant="h5">
                                             {emptyMessage}
                                         </Typography>
                                     </Stack>
@@ -74,6 +83,7 @@ export default function DataTable({
                                 return (
                                     <React.Fragment key={key}>
                                         <TableRow
+                                            hover
                                             sx={{ '&:last-child td, &:last-child th': { border: 0 }, cursor: onRowClick ? 'pointer' : undefined }}
                                             onClick={onRowClick ? () => onRowClick(row) : undefined}
                                         >
@@ -111,6 +121,7 @@ export default function DataTable({
                         onPageChange={onPageChange}
                         rowsPerPage={rowsPerPage}
                         onRowsPerPageChange={onRowsPerPageChange}
+                        sx={{ borderTop: '1px solid', borderColor: 'divider' }}
                     />
                 </div>
             )}

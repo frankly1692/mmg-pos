@@ -29,7 +29,7 @@ import { useQuery } from 'react-query';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { toLower } from 'lodash';
 
-export default memo(function ({ customer, selectedPackages, handleAddItem, disabled, setIsPackageOrPromoAdded }) {
+export default memo(function ({ customer, selectedPackages, handleAddItem, disabled, setIsPackageOrPromoAdded, hideTitle }) {
 
     console.log('customer', customer)
 
@@ -142,9 +142,11 @@ export default memo(function ({ customer, selectedPackages, handleAddItem, disab
 
     return (
         <Box>
-            <Typography mb={1} variant="h4">
-                Packages
-            </Typography>
+            {!hideTitle && (
+                <Typography mb={1} variant="h4">
+                    Packages
+                </Typography>
+            )}
             <Grid container spacing={1}>
                 <Grid item>
                     <Button

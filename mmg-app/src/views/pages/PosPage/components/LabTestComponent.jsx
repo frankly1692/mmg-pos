@@ -33,7 +33,7 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { toLower } from 'lodash';
 import service from 'api/service';
 
-export default memo(function ({ packageTests, selectedLabTest, handleAddItem, disabled }) {
+export default memo(function ({ packageTests, selectedLabTest, handleAddItem, disabled, hideTitle }) {
     const { data: services, isLoading, isRefetching, refetch } = useQuery('services', service.GetAllServices);
 
     const [search, setSearch] = useState('');
@@ -96,9 +96,11 @@ export default memo(function ({ packageTests, selectedLabTest, handleAddItem, di
 
     return (
         <Box flex={1} display="flex" flexDirection="column">
-            <Typography mb={1} variant="h4">
-                Lab Tests
-            </Typography>
+            {!hideTitle && (
+                <Typography mb={1} variant="h4">
+                    Lab Tests
+                </Typography>
+            )}
             <Grid container spacing={1}>
                 <Grid item>
                     <Button

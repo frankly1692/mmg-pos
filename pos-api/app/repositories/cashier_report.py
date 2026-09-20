@@ -25,11 +25,18 @@ class CashierReportRepository(Repository):
             data = list(self._db[self._collection].aggregate([
                 { '$match': query },
                 {
+                    # onError/onNull: null instead of the $toObjectId shorthand — a corrupt or
+                    # test-seeded id (e.g. a non-24-hex-char string like "FAKE-DUP-CASHIER") would
+                    # otherwise throw and fail this aggregation for every report in the collection,
+                    # not just the offending document. A null id simply fails to match in the
+                    # $lookup stages below, so the bad document is dropped (or, for
+                    # openingFundId/endingCashCountId, kept with that field empty) instead of
+                    # crashing the whole query.
                     "$addFields": {
-                        "cashierId": {"$toObjectId": "$cashierId"},
-                        "branchId": {"$toObjectId": "$branchId"},
-                        "openingFundId": {"$toObjectId": "$openingFundId"},
-                        "endingCashCountId": {"$toObjectId": "$endingCashCountId"},
+                        "cashierId": {"$convert": {"input": "$cashierId", "to": "objectId", "onError": None, "onNull": None}},
+                        "branchId": {"$convert": {"input": "$branchId", "to": "objectId", "onError": None, "onNull": None}},
+                        "openingFundId": {"$convert": {"input": "$openingFundId", "to": "objectId", "onError": None, "onNull": None}},
+                        "endingCashCountId": {"$convert": {"input": "$endingCashCountId", "to": "objectId", "onError": None, "onNull": None}},
                     }
                 },
                 { 
@@ -185,7 +192,7 @@ class CashierReportRepository(Repository):
                             },
                             {
                                 "$addFields": {
-                                    "transactionId": {"$toObjectId": "$transactionId"}
+                                    "transactionId": {"$convert": {"input": "$transactionId", "to": "objectId", "onError": None, "onNull": None}}
                                 }
                             },
                             {

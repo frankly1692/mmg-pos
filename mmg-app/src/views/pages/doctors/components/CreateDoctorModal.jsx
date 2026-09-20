@@ -7,7 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import AddIcon from '@mui/icons-material/Add';
 
 import Grid from '@mui/material/Grid';
-import { Checkbox, Divider, MenuItem, Stack, Typography, IconButton } from '@mui/material';
+import { Box, Checkbox, Divider, MenuItem, Stack, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { Field, Formik } from 'formik';
 import * as Yup from 'yup';
@@ -69,17 +69,29 @@ export default function () {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                New Doctor
-                                <IconButton onClick={handleClose} size="small" aria-label="Close">
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
+                            <DialogTitle sx={{ pb: 1.5 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                    <Box>
+                                        <Typography variant="h4" fontWeight={600}>
+                                            New Doctor
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" mt={0.25}>
+                                            Register a physician or healthcare specialist to the clinical registry.
+                                        </Typography>
+                                    </Box>
+                                    <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
                             </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             Name
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Full legal name
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={9}>
@@ -93,13 +105,19 @@ export default function () {
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             Others
+                                        </Typography>
+                                        <Typography variant="caption" color="text.secondary">
+                                            Demographics
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={9}>
                                         <Stack spacing={2}>
-                                            <TextField select name="gender" label="Gender">
+                                            <TextField select displayEmpty name="gender">
+                                                <MenuItem value="" disabled>
+                                                    Gender
+                                                </MenuItem>
                                                 <MenuItem value="M">Male</MenuItem>
                                                 <MenuItem value="F">Female</MenuItem>
                                             </TextField>
@@ -111,10 +129,17 @@ export default function () {
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3} alignSelf="center">
-                                        <Typography variant="caption">Member</Typography>
+                                        <Typography variant="body2" fontWeight={600}>
+                                            Member
+                                        </Typography>
                                     </Grid>
                                     <Grid item xs={9}>
-                                        <Field name="isMember">{({ field }) => <Checkbox {...field} />}</Field>
+                                        <Stack direction="row" alignItems="center" spacing={1}>
+                                            <Field name="isMember">{({ field }) => <Checkbox {...field} checked={field.value} />}</Field>
+                                            <Typography variant="body2" color="text.secondary">
+                                                Check if doctor is an active hospital or network member
+                                            </Typography>
+                                        </Stack>
                                     </Grid>
                                 </Grid>
                             </DialogContent>

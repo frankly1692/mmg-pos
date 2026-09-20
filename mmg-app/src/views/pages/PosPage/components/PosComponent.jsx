@@ -781,6 +781,13 @@ const PosComponent = () => {
   useHotkeys('f4', () => handleOpenDrawer('history'), { preventDefault: true });
   useHotkeys('f5', () => handleOpenDrawer('services'), { preventDefault: true });
   useHotkeys('f6', () => handleOpenDrawer('dreport'), { preventDefault: true });
+  // Mirrors the Settle Payment button's own disabled condition below — a customer/patient must be
+  // selected and the cart can't be empty. react-hotkeys-hook ignores this while focus is in a
+  // form field (search boxes, dialogs), so it can't interfere with typing a literal space.
+  const canCheckout =
+    !!customerData?.name &&
+    !(selectedPackagesX?.packages?.length === 0 && selectedPackagesX?.promos?.length === 0 && selectedPackagesX?.labtests?.length === 0);
+  useHotkeys('space', () => canCheckout && setCheckout(true), { preventDefault: true }, [canCheckout]);
 
   const renderGridItem = (label, value, highlight = false) => (
     <>
@@ -848,51 +855,49 @@ const PosComponent = () => {
       <Grid container spacing={1.5} sx={{ height: '100%', zoom: smallScreenSize ? '70%' : '100%' }}>
         <Grid item xs={2.5} sx={{ overflow: 'hidden' }}>
           <Stack direction="column" spacing={1.5} sx={{ height: '100%' }}>
-            <Stack direction="row-reverse" spacing={1}>
-              <Card sx={{ px: 3, py: 2, flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Stack>
-                  <Typography variant="h4">{`${sessionItems?.firstName} ${sessionItems?.lastName}`}</Typography>
-                  <Typography variant="h5" fontWeight="regular">
-                    Cashier
-                  </Typography>
-                </Stack>
-                <Tooltip title="Go To Dashboard">
+            <Card sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Stack>
+                <Typography variant="h4">{`${sessionItems?.firstName} ${sessionItems?.lastName}`}</Typography>
+                <Typography variant="h5" fontWeight="regular" color="text.secondary">
+                  Cashier
+                </Typography>
+              </Stack>
+              <Tooltip title="Go To Dashboard">
+                <IconButton>
+                  <TiHome onClick={() => navigate('/dashboard/home')} />
+                </IconButton>
+              </Tooltip>
+            </Card>
+            <Card sx={{ px: 3, py: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Stack sx={{ opacity: isReportRefetching ? 0.5 : 1 }} justifyContent="center" flex={1}>
+                <Typography variant="subtitle2" color="text.secondary" fontWeight={600} letterSpacing={0.5}>
+                  DRAWER BALANCE
+                </Typography>
+                <Typography variant="h1" fontWeight="bold">
+                  <FaPesoSign style={{ fontSize: '0.85rem' }} />
+                  {getDrawerBalance() !== undefined ? new Intl.NumberFormat().format(parseFloat(getDrawerBalance())) : '0.00'}
+                </Typography>
+              </Stack>
+              {isReportRefetching ? (
+                <CircularProgress size="2rem" />
+              ) : (
+                <Tooltip title="Time Out">
                   <IconButton>
-                    <TiHome onClick={() => navigate('/dashboard/home')} />
+                    <BiSolidExit onClick={() => setIfLogout(true)} />
                   </IconButton>
                 </Tooltip>
-              </Card>
-            </Stack>
-            <Stack direction="row-reverse" spacing={1}>
-              <Card sx={{ px: 3, py: 2, flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Stack sx={{ opacity: isReportRefetching ? 0.5 : 1 }} justifyContent="center" flex={1}>
-                  <Typography variant="subtitle2">Drawer Balance</Typography>
-                  <Typography variant="h1" fontWeight="bold">
-                    <FaPesoSign style={{ fontSize: '0.85rem' }} />
-                    {getDrawerBalance() !== undefined ? new Intl.NumberFormat().format(parseFloat(getDrawerBalance())) : '0.00'}
-                  </Typography>
-                </Stack>
-                {isReportRefetching ? (
-                  <CircularProgress size="2rem" />
-                ) : (
-                  <Tooltip title="Time Out">
-                    <IconButton>
-                      <BiSolidExit onClick={() => setIfLogout(true)} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Card>
-            </Stack>
+              )}
+            </Card>
             <Card sx={{ p: 3 }}>
               <Stack direction="column" spacing={1.8}>
-                <Typography variant="h4">Customer</Typography>
+                <Typography variant="h4">Customer / Patient</Typography>
                 <CusCorSelect
                   name="selection"
                   control={control}
                   isNewTrans={isNewTrans}
                   onSelectedDataChange={handleSelectedDataChange}
                   customerData={customerData}
-                  label="Search"
+                  label="Search Patient"
                 />
                 {/* {customerData?.customerType === 'corporate' && (
                   <Controller
@@ -969,7 +974,7 @@ const PosComponent = () => {
             </Card>
             <Card sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
               <Typography mb={1} variant="h4">
-                Actions
+                POS Actions &amp; Shortcuts
               </Typography>
               <Grid container spacing={0.5}>
                 {[
@@ -1015,35 +1020,71 @@ const PosComponent = () => {
                     disabled={!customerData?.name || totalItems === 0}
                   />
                 </Grid>
-                <Grid item xs={12} lg={6}>
-                  <ClearComponent />
+                <Grid item xs={12}>
+                  <ClearComponent buttonProps={{ color: 'error' }} />
                 </Grid>
               </Grid>
               <div style={{ flex: 1 }}></div>
-              <Typography variant="h5" fontWeight="regular">
-                Printer: {printerStatus}
-              </Typography>
-              <Typography variant="h5" fontWeight="regular">
-                {import.meta.env.VITE_APP_VERSION}
-              </Typography>
+              <Stack direction="row" spacing={0.75} alignItems="center">
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    bgcolor: printerStatus === 'OPEN' ? 'success.main' : 'error.main'
+                  }}
+                />
+                <Typography variant="h5" fontWeight="regular">
+                  Thermal Printer: {printerStatus}
+                </Typography>
+              </Stack>
             </Card>
           </Stack>
         </Grid>
-        <Grid item xs={6.5}>
-          <Stack direction="column-reverse" spacing={1.5} width="100%" height="100%">
+        <Grid item xs={6.5} sx={{ overflow: 'hidden', height: '100%' }}>
+          <Stack direction="column" spacing={1.5} width="100%" height="100%">
+            <Card sx={{ px: 3, py: 2 }}>
+              <PackagesComponent
+                customer={customerData}
+                disabled={!customerData?.name}
+                selectedPackages={selectedPackages}
+                handleAddItem={handleAddItem}
+                setIsPackageOrPromoAdded={setIsPackageOrPromoAdded}
+                hideTitle
+              />
+            </Card>
+            <Card sx={{ p: 3, maxHeight: '36%', overflowY: 'auto', flexShrink: 0 }}>
+              <Typography variant="h4">Lab Tests &amp; Clinical Procedures</Typography>
+              <Typography variant="caption" color="text.secondary" display="block" mb={1.5}>
+                Click pill to append to invoice
+              </Typography>
+              <LabTestComponent
+                packageTests={selectedPackagesX.packages}
+                selectedLabTest={selectedLabTest}
+                handleAddItem={handleAddItem}
+                disabled={!customerData?.name}
+                hideTitle
+              />
+            </Card>
             <Card
               sx={{
-                flex: 1.2,
+                flex: 1,
                 p: 3,
-                height: '100%',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                overflow: 'hidden'
               }}
             >
               <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
-                <Typography mb={2} variant="h4">
-                  Transaction Items
-                </Typography>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Typography variant="h4">Transaction Items</Typography>
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`${totalItems} item${totalItems === 1 ? '' : 's'} added`}
+                  />
+                </Stack>
                 <Button variant="outlined" color="error" onClick={() => handleClearTransItem()}>
                   Clear
                 </Button>
@@ -1109,31 +1150,6 @@ const PosComponent = () => {
                   />
                 )}
               </TableContainer>
-            </Card>
-            <Card
-              sx={{
-                flexBasis: '40%',
-                p: 3,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                overflowY: 'auto',
-                gap: 2
-              }}
-            >
-              <PackagesComponent
-                customer={customerData}
-                disabled={!customerData?.name}
-                selectedPackages={selectedPackages}
-                handleAddItem={handleAddItem}
-                setIsPackageOrPromoAdded={setIsPackageOrPromoAdded}
-              />
-              <LabTestComponent
-                packageTests={selectedPackagesX.packages}
-                selectedLabTest={selectedLabTest}
-                handleAddItem={handleAddItem}
-                disabled={!customerData?.name}
-              />
             </Card>
           </Stack>
         </Grid>
@@ -1211,13 +1227,6 @@ const PosComponent = () => {
                   </>
                 )}
                 {renderGridItem(
-                  'Total:',
-                  <>
-                    <FaPesoSign style={{ marginLeft: '6px', fontSize: '0.85rem' }} />
-                    {total?.toFixed(2)}
-                  </>
-                )}
-                {renderGridItem(
                   'Tax:',
                   <>
                     <FaPesoSign style={{ marginLeft: '6px', fontSize: '0.85rem' }} />
@@ -1225,22 +1234,21 @@ const PosComponent = () => {
                   </>
                 )}
               </Grid>
-              <Button
-                sx={{ py: 1.5 }}
-                fullWidth
-                variant="contained"
-                size="large"
-                disabled={
-                  !customerData?.name ||
-                  (selectedPackagesX?.packages?.length === 0 &&
-                    selectedPackagesX?.promos?.length === 0 &&
-                    selectedPackagesX?.labtests?.length === 0)
-                }
-                onClick={() => setCheckout(true)}
-              >
-                CHECKOUT <FaPesoSign style={{ marginLeft: '10px', fontSize: '0.85rem' }} />
-                {total?.toFixed(2)}
-              </Button>
+              <Box>
+                <Divider sx={{ mb: 1.5 }} />
+                <Stack direction="row" justifyContent="space-between" alignItems="baseline" mb={1.5}>
+                  <Typography variant="subtitle2" color="text.secondary" fontWeight={600} letterSpacing={0.5}>
+                    TOTAL PAYABLE
+                  </Typography>
+                  <Typography variant="h2" color="primary.main" fontWeight="bold">
+                    <FaPesoSign style={{ fontSize: '0.7em' }} />
+                    {total?.toFixed(2)}
+                  </Typography>
+                </Stack>
+                <Button sx={{ py: 1.5 }} fullWidth variant="contained" size="large" disabled={!canCheckout} onClick={() => setCheckout(true)}>
+                  Settle Payment (Space)
+                </Button>
+              </Box>
             </Card>
           </Stack>
         </Grid>

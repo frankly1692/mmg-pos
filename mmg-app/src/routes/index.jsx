@@ -4,6 +4,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import MainRoutes from './MainRoutes';
 import LoginRoutes from './AuthRoutes';
 import PosRoutes from './PosRoutes';
+import DefaultRoutes from './DefaultRoutes';
 import RedictRoute from './components/RedirectRoute';
 import AuthorizeRoute from './components/AuthorizeRoute';
 
@@ -21,7 +22,7 @@ export function RequireAuth(children, roles) {
 }
 
 // ==============================|| ROUTING RENDER ||============================== //
-const router = createBrowserRouter([RootRoutes, MainRoutes, PosRoutes, LoginRoutes], {
+const router = createBrowserRouter([RootRoutes, MainRoutes, PosRoutes, LoginRoutes, DefaultRoutes], {
     basename: import.meta.env.VITE_APP_BASE_NAME
 });
 

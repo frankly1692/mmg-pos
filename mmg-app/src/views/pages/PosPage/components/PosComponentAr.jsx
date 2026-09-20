@@ -1223,7 +1223,7 @@ const PosComponent = () => {
               onRestoreTransaction={handleRestoreTransaction}
             />
           )}
-          {drawerContent === 'services' && <ServicesPage />}
+          {drawerContent === 'services' && <ServicesPage mode="view" />}
           {drawerContent === 'dreport' && <DailyReport cashierId={sessionItems?._id} branchId={branch?.id} />}
         </RightDrawer>
 

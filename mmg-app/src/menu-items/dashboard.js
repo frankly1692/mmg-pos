@@ -72,7 +72,7 @@ const dashboard = {
         ,
         {
             id: 'labtest',
-            title: 'Lab Test',
+            title: 'Diagnostics',
             type: 'item',
             url: '/dashboard/labtest',
             icon: icons.MdMedicalServices,
@@ -80,7 +80,7 @@ const dashboard = {
         },
         {
             id: 'labtest-categories',
-            title: 'Lab Test Categories',
+            title: 'Diagnostics Categories',
             type: 'item',
             url: '/dashboard/labtest-categories',
             icon: icons.MdCategory,

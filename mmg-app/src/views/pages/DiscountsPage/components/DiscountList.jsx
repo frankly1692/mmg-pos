@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
     Typography,
     Button,
@@ -9,12 +8,15 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     TextField,
     Stack,
+    IconButton,
+    Chip,
+    Avatar,
+    Box,
+    Card,
     CircularProgress,
     TablePagination,
-    Select,
     MenuItem
 } from '@mui/material';
 import { toast, ToastContainer } from 'react-toastify';
@@ -22,64 +24,69 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
-import { FaPesoSign } from 'react-icons/fa6';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import { startCase } from 'lodash';
 // api
 import discount from 'api/discount';
 
 import DiscountFormModal from './DiscountFormModal';
 
-// Mock data
-const mockDiscounts = [
-    {
-        id: 'dis-0001',
-        name: 'Senior Citizen Discount',
-        description: 'This is a description for Discount 1',
-        discountPercentage: 0.2
-    },
-    {
-        id: 'dis-0002',
-        name: 'PWD Discount',
-        description: 'This is a description for Discount 1',
-        discountPercentage: 0.2
-    }
+const SORT_OPTIONS = [
+    { value: 'name-asc', label: 'Name (A-Z)' },
+    { value: 'name-desc', label: 'Name (Z-A)' },
+    { value: 'value-asc', label: 'Value (Low-High)' },
+    { value: 'value-desc', label: 'Value (High-Low)' }
 ];
 
+// Deterministic pastel avatar color derived from the record's own id, stable across reloads/re-sorts.
+const stringToAvatarColor = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str?.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return { bg: `hsl(${hue}, 70%, 92%)`, color: `hsl(${hue}, 55%, 38%)` };
+};
+
+const getInitials = (name) =>
+    (name || '')
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join('')
+        .toUpperCase();
+
+const formatDiscountValue = (d) => (d.type === 'percentage' ? `${d.value}%` : `₱${new Intl.NumberFormat().format(d.value)}`);
+
 const DiscountList = () => {
-    const navigate = useNavigate();
     const [openModal, setOpenModal] = useState(false);
     const [editingDiscount, setEditingDiscount] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedType, setSelectedType] = useState('all');
+    const [sortBy, setSortBy] = useState('name-asc');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [selectedStatus, setSelectedStatus] = useState('');
 
     const queryClient = useQueryClient();
 
-    const { data: discounts, isLoading, isError, error } = useQuery('discounts', discount.GetAllDiscounts);
+    const { data: discounts, isLoading } = useQuery('discounts', discount.GetAllDiscounts);
 
     const createDiscountMutation = useMutation(discount.CreateDiscount, {
         onMutate: async (newDiscount) => {
             await queryClient.cancelQueries('discounts');
             const previousDiscounts = queryClient.getQueryData('discounts');
-
-            // Check if a package with the same name already exists
-            const existingDiscount = previousDiscounts?.find(
-                (pkg) => pkg.name.toLowerCase() === newDiscount.name.toLowerCase()
-            );
+            const existingDiscount = previousDiscounts?.find((d) => d.name.toLowerCase() === newDiscount.name.toLowerCase());
 
             if (existingDiscount) {
-                // If a package with the same name exists, throw an error
                 throw new Error('A discount with this name already exists.');
             } else {
-                // If no duplicate found, proceed with creating the new package
                 if (!previousDiscounts || previousDiscounts.length === 0) {
-                    // If empty, proceed with creating the new service
-                    queryClient.setQueryData('packages', [newDiscount]);
+                    queryClient.setQueryData('discounts', [newDiscount]);
                 } else {
-                    // If not empty, append the new service to the existing list
                     queryClient.setQueryData('discounts', (old) => [...old, newDiscount]);
                 }
-
                 return { previousDiscounts };
             }
         },
@@ -102,8 +109,7 @@ const DiscountList = () => {
         onMutate: async (updateDiscount) => {
             await queryClient.cancelQueries('discounts');
             const previousDiscounts = queryClient.getQueryData('discounts');
-
-            queryClient.setQueryData('discounts', (old) => old.map((cat) => (cat._id === updateDiscount._id ? updateDiscount : cat)));
+            queryClient.setQueryData('discounts', (old) => old.map((d) => (d._id === updateDiscount._id ? updateDiscount : d)));
             return { previousDiscounts };
         },
         onError: (err) => {
@@ -123,34 +129,34 @@ const DiscountList = () => {
 
     const handleSearch = (event) => {
         setSearchQuery(event.target.value);
+        setPage(0);
     };
 
-    const handleStatusChange = (event) => {
-        setSelectedStatus(event.target.value);
+    const handleTypeChange = (event) => {
+        setSelectedType(event.target.value);
+        setPage(0);
     };
 
     const handleNewDiscount = () => {
-        setEditingDiscount(null); // Clear any previous editing data
+        setEditingDiscount(null);
         setOpenModal(true);
     };
 
     const handleEditDiscount = (id) => {
-        const discount = discounts.find((c) => c._id === id); // Use 'id' instead of 'sku'
-        if (discount) {
+        const found = discounts.find((c) => c._id === id);
+        if (found) {
             setEditingDiscount({
-                id: discount._id,
-                name: discount.name,
-                description: discount.description,
-                value: discount.value,
-                type: discount.type
+                id: found._id,
+                name: found.name,
+                description: found.description,
+                value: found.value,
+                type: found.type
             });
-            setOpenModal(true); // Open the modal for editing
+            setOpenModal(true);
         }
     };
 
-    const handleCloseModal = () => {
-        setOpenModal(false);
-    };
+    const handleCloseModal = () => setOpenModal(false);
 
     const handleSubmitForm = async (data) => {
         try {
@@ -163,135 +169,221 @@ const DiscountList = () => {
         } catch (error) {
             console.error('Error submitting form:', error);
         }
-        console.log(data);
     };
 
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
+    const handleChangePage = (event, newPage) => setPage(newPage);
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0);
     };
 
-    // const filteredDiscounts = discounts?.filter((discount) => discount?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
-
     const filteredDiscounts = useMemo(() => {
-        return discounts?.filter(
-            (discount) =>
-                discount.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-                (selectedStatus === '' || discount.type === selectedStatus)
+        const query = searchQuery.toLowerCase();
+        const filtered = (discounts || []).filter(
+            (d) => d.name.toLowerCase().includes(query) && (selectedType === 'all' || d.type === selectedType)
         );
-    }, [discounts, searchQuery, selectedStatus]);
 
-    const uniqueStatus = useMemo(() => {
-        return [...new Set(discounts?.map((discount) => discount?.type))];
-    }, [discounts]);
+        const [field, direction] = sortBy.split('-');
+        const sorted = [...filtered].sort((a, b) => {
+            let result = 0;
+            if (field === 'name') {
+                result = a.name.localeCompare(b.name);
+            } else if (field === 'value') {
+                result = (a.value || 0) - (b.value || 0);
+            }
+            return direction === 'desc' ? -result : result;
+        });
 
-    const renderTableView = () => (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <TableContainer component={Paper}>
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                            <TableCell>Name</TableCell>
-                            <TableCell sx={{ textWrap: 'nowrap', overflow: 'hidden' }}>Description</TableCell>
-                            <TableCell>Discount</TableCell>
-                            <TableCell>Type</TableCell>
-                            <TableCell>Action</TableCell>
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {filteredDiscounts?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((discount) => (
-                            <TableRow key={discount._id}>
-                                <TableCell>{discount.name}</TableCell>
-                                <TableCell dangerouslySetInnerHTML={{ __html: discount.description }} />
-                                <TableCell>
-                                    <Stack direction="row" alignItems="center">
-                                        {discount.type == 'percentage' ? (
-                                            `${discount.value}%`
-                                        ) : (
-                                            <>
-                                                <FaPesoSign fontSize={16} />
-                                                {`${new Intl.NumberFormat().format(discount.value)}`}
-                                            </>
-                                        )}
-                                    </Stack>
-                                </TableCell>
-                                <TableCell>{discount.type}</TableCell>
-                                <TableCell>
-                                    <Button
-                                        variant="outlined"
-                                        size="small"
-                                        color="primary"
-                                        onClick={() => handleEditDiscount(discount._id)}
-                                        startIcon={<EditIcon />}
-                                    >
-                                        Edit
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </TableContainer>
-            <div style={{ flex: '0 1 auto' }}>
-                <TablePagination
-                    component="div"
-                    count={filteredDiscounts?.length}
-                    page={page}
-                    onPageChange={handleChangePage}
-                    rowsPerPage={rowsPerPage}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                />
-            </div>
-        </div>
+        return sorted;
+    }, [discounts, searchQuery, selectedType, sortBy]);
+
+    const uniqueTypes = useMemo(() => Array.from(new Set((discounts || []).map((d) => d.type).filter(Boolean))), [discounts]);
+
+    const paginated = filteredDiscounts.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+    const renderHeader = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Typography variant="h2" fontWeight={600}>
+                            Discounts
+                        </Typography>
+                        <Chip
+                            size="small"
+                            label={`${(discounts?.length || 0).toLocaleString()} Discounts`}
+                            sx={{ bgcolor: 'primary.light', color: 'primary.dark', fontWeight: 500 }}
+                        />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" mt={0.5}>
+                        Manage promotional rates and eligibility-based discounts for lab tests and services.
+                    </Typography>
+                </Box>
+                <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleNewDiscount}>
+                    New Discount
+                </Button>
+            </Box>
+        </Card>
+    );
+
+    const renderFilters = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flex={1}>
+                        <TextField
+                            size="small"
+                            placeholder="Search by discount name..."
+                            value={searchQuery}
+                            onChange={handleSearch}
+                            sx={{ flex: 1, minWidth: 260 }}
+                            InputProps={{
+                                startAdornment: <SearchIcon fontSize="small" color="action" sx={{ mr: 1 }} />,
+                                endAdornment: searchQuery ? (
+                                    <IconButton size="small" onClick={() => setSearchQuery('')}>
+                                        <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                ) : null
+                            }}
+                        />
+                        <TextField select size="small" value={selectedType} onChange={handleTypeChange} sx={{ minWidth: 160 }}>
+                            <MenuItem value="all">All Types</MenuItem>
+                            {uniqueTypes.map((type) => (
+                                <MenuItem key={type} value={type}>
+                                    {startCase(type)}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="body2" color="text.secondary" whiteSpace="nowrap">
+                            Sort by:
+                        </Typography>
+                        <TextField
+                            select
+                            size="small"
+                            variant="standard"
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            InputProps={{ disableUnderline: true }}
+                            sx={{ minWidth: 150 }}
+                        >
+                            {SORT_OPTIONS.map((option) => (
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    </Stack>
+                </Stack>
+            </Box>
+        </Card>
+    );
+
+    const renderEmptyState = () => (
+        <Stack alignItems="center" py={6}>
+            <Typography color="text.secondary" variant="h5">
+                No discounts to display. Try checking your filters
+            </Typography>
+        </Stack>
     );
 
     if (isLoading) {
         return (
-            <Stack direction="column" justifyContent="center" alignItems="center" spacing={2}>
-                <CircularProgress />
+            <Stack spacing={2.5}>
+                <ToastContainer />
+                {renderHeader()}
+                {renderFilters()}
+                <Stack alignItems="center" py={6}>
+                    <CircularProgress size={28} />
+                </Stack>
             </Stack>
         );
     }
 
-    if (isError) {
-        return <Typography color="error">{error.message}</Typography>;
-    }
-
     return (
-        <div>
+        <Stack spacing={2.5}>
             <ToastContainer />
-            <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                justifyContent="space-between"
-                alignItems={{ xs: 'flex-start', sm: 'center' }}
-                spacing={2}
-                mb={3}
-            >
-                <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2}>
-                    <Select value={selectedStatus} onChange={handleStatusChange} displayEmpty size="small" sx={{ minWidth: 190 }}>
-                        <MenuItem value="">All Types</MenuItem>
-                        {uniqueStatus.map((status) => (
-                            <MenuItem key={status} value={status}>
-                                {status}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                    <TextField label="Search" variant="outlined" onChange={handleSearch} size="small" sx={{ minWidth: 300 }} />
-                </Stack>
-                <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={2}>
-                    <Button startIcon={<AddIcon />} variant="contained" onClick={handleNewDiscount}>
-                        New Discount
-                    </Button>
-                </Stack>
-            </Stack>
-            {renderTableView()}
+            {renderHeader()}
+            {renderFilters()}
+            <Card sx={{ overflow: 'hidden' }}>
+                <TableContainer>
+                    <Table>
+                        <TableHead>
+                            <TableRow sx={{ bgcolor: 'grey.50' }}>
+                                {['Name', 'Description', 'Discount Value', 'Type', 'Action'].map((head) => (
+                                    <TableCell
+                                        key={head}
+                                        align={head === 'Action' ? 'right' : 'left'}
+                                        sx={{ fontSize: '0.75rem', fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5 }}
+                                    >
+                                        {head.toUpperCase()}
+                                    </TableCell>
+                                ))}
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {paginated.length === 0 && (
+                                <TableRow>
+                                    <TableCell colSpan={5}>{renderEmptyState()}</TableCell>
+                                </TableRow>
+                            )}
+                            {paginated.map((d) => {
+                                const avatarColor = stringToAvatarColor(d._id);
+                                return (
+                                    <TableRow key={d._id} hover>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={1.5} alignItems="center">
+                                                <Avatar sx={{ bgcolor: avatarColor.bg, color: avatarColor.color, fontWeight: 600, fontSize: '0.8125rem' }}>
+                                                    {getInitials(d.name)}
+                                                </Avatar>
+                                                <Typography variant="body2" fontWeight={600}>
+                                                    {d.name}
+                                                </Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell sx={{ maxWidth: 320 }}>
+                                            <Typography variant="body2" color="text.secondary" dangerouslySetInnerHTML={{ __html: d.description || '' }} />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" fontWeight={600}>
+                                                {formatDiscountValue(d)}
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip label={startCase(d.type)} size="small" variant="outlined" />
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Button
+                                                variant="outlined"
+                                                size="small"
+                                                color="primary"
+                                                onClick={() => handleEditDiscount(d._id)}
+                                                startIcon={<EditIcon fontSize="small" />}
+                                            >
+                                                Edit
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
+                <TablePagination
+                    component="div"
+                    count={filteredDiscounts.length}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    rowsPerPage={rowsPerPage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+                />
+            </Card>
 
             <DiscountFormModal open={openModal} onClose={handleCloseModal} onSubmit={handleSubmitForm} discount={editingDiscount} />
-        </div>
+        </Stack>
     );
 };
 

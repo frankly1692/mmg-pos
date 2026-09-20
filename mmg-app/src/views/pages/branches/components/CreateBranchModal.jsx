@@ -7,7 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import AddIcon from '@mui/icons-material/Add';
 
 import Grid from '@mui/material/Grid';
-import { Divider, Stack, Typography, IconButton } from '@mui/material';
+import { Box, Divider, Stack, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -71,16 +71,25 @@ export default function () {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                New Branch
-                                <IconButton onClick={handleClose} size="small" aria-label="Close">
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
+                            <DialogTitle sx={{ pb: 1.5 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                    <Box>
+                                        <Typography variant="h4" fontWeight={600}>
+                                            New Branch
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" mt={0.25}>
+                                            Register a diagnostic center, clinic branch, or satellite facility.
+                                        </Typography>
+                                    </Box>
+                                    <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
                             </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             Name
                                         </Typography>
                                     </Grid>
@@ -94,7 +103,7 @@ export default function () {
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             Address
                                         </Typography>
                                     </Grid>
@@ -106,20 +115,12 @@ export default function () {
                                             name="streetAddress"
                                             placeholder="Full Address"
                                         />
-                                        {/* <Stack spacing={2}>
-                                            
-                                            <TextField name="city" placeholder="City" /> 
-                                            <Stack direction="row" width="100%" spacing={1}>
-                                                <TextField name="state" placeholder="State" />
-                                                <TextField name="postalCode" placeholder="Postal Code" />
-                                            </Stack>
-                                        </Stack> */}
                                     </Grid>
                                     <Grid item xs={12}>
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3}>
-                                        <Typography variant="caption">
+                                        <Typography variant="body2" fontWeight={600}>
                                             Contact
                                         </Typography>
                                     </Grid>

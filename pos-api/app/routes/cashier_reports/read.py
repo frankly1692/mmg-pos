@@ -19,9 +19,13 @@ def _get_cashier_reports():
           reports = cashier_reports.aggregate([
               { '$match': query },
               {
+                    # onError/onNull: null — a corrupt/test-seeded id that isn't a valid 24-hex-char
+                    # ObjectId string would otherwise throw and fail this aggregation for every
+                    # report, not just the offending document (see app/repositories/cashier_report.py
+                    # for the same fix on the v2 route).
                     "$addFields": {
-                         "cashierId": {"$toObjectId": "$cashierId"},
-                         "branchId": {"$toObjectId": "$branchId"}
+                         "cashierId": {"$convert": {"input": "$cashierId", "to": "objectId", "onError": None, "onNull": None}},
+                         "branchId": {"$convert": {"input": "$branchId", "to": "objectId", "onError": None, "onNull": None}}
                     }
                },
               { 

@@ -7,7 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import EditIcon from '@mui/icons-material/Edit';
 
 import Grid from '@mui/material/Grid';
-import { Divider, Stack, Typography, IconButton } from '@mui/material';
+import { Box, Divider, Stack, Typography, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
@@ -63,16 +63,25 @@ export default function ({ initialValues }) {
                 >
                     {({ handleSubmit, submitForm, isSubmitting }) => (
                         <form noValidate onSubmit={handleSubmit}>
-                            <DialogTitle sx={{ fontSize: '1.1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                Edit Corporate
-                                <IconButton onClick={handleClose} size="small" aria-label="Close">
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
+                            <DialogTitle sx={{ pb: 1.5 }}>
+                                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                                    <Box>
+                                        <Typography variant="h4" fontWeight={600}>
+                                            Edit Corporate
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" mt={0.25}>
+                                            Update this corporate client, HMO provider, or insurance partner.
+                                        </Typography>
+                                    </Box>
+                                    <IconButton onClick={handleClose} size="small" aria-label="Close">
+                                        <CloseIcon fontSize="small" />
+                                    </IconButton>
+                                </Stack>
                             </DialogTitle>
                             <DialogContent>
                                 <Grid container spacing={2}>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             Name
                                         </Typography>
                                     </Grid>
@@ -83,18 +92,18 @@ export default function ({ initialValues }) {
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             TIN
                                         </Typography>
                                     </Grid>
                                     <Grid item xs={9}>
-                                        <TextField name="tinId" placeholder="Tin Number" helperText/>
+                                        <TextField name="tinId" placeholder="Tin Number" helperText />
                                     </Grid>
                                     <Grid item xs={12}>
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography className="required" variant="body2" fontWeight={600}>
                                             Address
                                         </Typography>
                                     </Grid>
@@ -112,7 +121,7 @@ export default function ({ initialValues }) {
                                         <Divider />
                                     </Grid>
                                     <Grid item xs={3}>
-                                        <Typography className="required" variant="caption">
+                                        <Typography variant="body2" fontWeight={600}>
                                             Contact
                                         </Typography>
                                     </Grid>

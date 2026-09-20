@@ -67,7 +67,7 @@ const InvoiceNumberSelector = ({ options }) => {
     );
 };
 
-export default memo(function ({ disabled }) {
+export default memo(function ({ disabled, buttonProps }) {
     const context = useCashierReport()
     const [open, setOpen] = useState(false);
     const { mutateAsync: cancelTransaction } = useMutation(transaction.CancelTransaction)
@@ -101,11 +101,13 @@ export default memo(function ({ disabled }) {
                 fullWidth
                 startIcon={<MdDelete />}
                 disabled={disabled}
+                {...buttonProps}
                 sx={{
                     py: 2,
                     height: '100%',
                     textWrap: 'nowrap',
                     overflow: 'hidden',
+                    ...buttonProps?.sx
                 }}
                 onClick={onToggle}
             >

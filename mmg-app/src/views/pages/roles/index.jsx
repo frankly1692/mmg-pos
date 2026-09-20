@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
-import { Stack, TextField, TableRow, TableCell, Table, TableBody, CircularProgress } from '@mui/material';
+import React, { useState, useMemo } from 'react';
+import { Typography, Button, Stack, TextField, IconButton, Chip, Avatar, Box, Card, TableRow, TableCell, Table, TableBody, CircularProgress } from '@mui/material';
 import CreateRoleModal from './components/CreateRoleModal';
-import MainCard from 'ui-component/cards/MainCard';
 import DataTable from 'ui-component/DataTable';
 import { useQuery } from 'react-query';
 import role from 'api/role';
 import { startCase } from 'lodash';
 import UpdateRoleModal from './components/UpdateRoleModal';
+import AddIcon from '@mui/icons-material/Add';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+
+// Deterministic pastel avatar color derived from the record's own id, stable across reloads/re-sorts.
+const stringToAvatarColor = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str?.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return { bg: `hsl(${hue}, 70%, 92%)`, color: `hsl(${hue}, 55%, 38%)` };
+};
+
+const getInitials = (name) =>
+    (name || '')
+        .split(/[\s-]+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join('')
+        .toUpperCase();
 
 const columns = [
     {
@@ -14,9 +35,27 @@ const columns = [
         header: 'Name',
         width: 0,
         nowrap: true,
-        render: (role) => startCase(role.name)
+        render: (role) => {
+            const avatarColor = stringToAvatarColor(role._id);
+            return (
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Avatar sx={{ bgcolor: avatarColor.bg, color: avatarColor.color, fontWeight: 600, fontSize: '0.8125rem' }}>
+                        {getInitials(role.name)}
+                    </Avatar>
+                    <Typography variant="body2" fontWeight={600}>
+                        {startCase(role.name)}
+                    </Typography>
+                </Stack>
+            );
+        }
     },
-    { key: 'spacer1', header: '' },
+    {
+        key: 'permissions',
+        header: 'Permissions',
+        render: (role) => (
+            <Chip label={`${role?.authorizations?.length || 0} Resources`} size="small" variant="outlined" />
+        )
+    },
     { key: 'spacer2', header: '' },
     {
         key: 'actions',
@@ -37,6 +76,7 @@ function RolesPage() {
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [expandedRow, setExpandedRow] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     const handleChangePage = (event, newPage) => {
         setPage(newPage);
@@ -51,22 +91,61 @@ function RolesPage() {
         setExpandedRow(expandedRow === role._id ? null : role._id);
     };
 
+    const filteredRoles = useMemo(() => {
+        const query = searchQuery.toLowerCase();
+        return (roles || []).filter((r) => r.name.toLowerCase().includes(query));
+    }, [roles, searchQuery]);
+
     return (
-        <MainCard title="Manage Roles">
-            <Stack
-                mb={2}
-                gap={1}
-                direction={{ xs: 'column', sm: 'row' }}
-                alignItems={{ xs: 'flex-start', sm: 'center' }}
-                justifyContent="space-between"
-            >
-                <TextField variant="outlined" size="small" label="Search" sx={{ width: { xs: '100%', sm: 360 } }} />
-                <CreateRoleModal />
-            </Stack>
+        <Stack spacing={2.5}>
+            <Card>
+                <Box sx={{ px: 3, py: 2.5, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box>
+                        <Stack direction="row" spacing={1.5} alignItems="center">
+                            <Typography variant="h2" fontWeight={600}>
+                                Roles
+                            </Typography>
+                            <Chip
+                                size="small"
+                                label={`${(roles?.length || 0).toLocaleString()} Roles`}
+                                sx={{ bgcolor: 'primary.light', color: 'primary.dark', fontWeight: 500 }}
+                            />
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary" mt={0.5}>
+                            Manage staff roles and their resource-level permissions.
+                        </Typography>
+                    </Box>
+                    <CreateRoleModal />
+                </Box>
+            </Card>
+
+            <Card>
+                <Box sx={{ px: 3, py: 2.5 }}>
+                    <TextField
+                        size="small"
+                        placeholder="Search by role name..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setPage(0);
+                        }}
+                        sx={{ minWidth: 300 }}
+                        InputProps={{
+                            startAdornment: <SearchIcon fontSize="small" color="action" sx={{ mr: 1 }} />,
+                            endAdornment: searchQuery ? (
+                                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                                    <ClearIcon fontSize="small" />
+                                </IconButton>
+                            ) : null
+                        }}
+                    />
+                </Box>
+            </Card>
+
             <DataTable
                 dense
                 columns={columns}
-                rows={roles}
+                rows={filteredRoles}
                 isLoading={isLoading}
                 isRefetching={isRefetching}
                 onRowClick={handleRowClick}
@@ -92,9 +171,9 @@ function RolesPage() {
                 rowsPerPage={rowsPerPage}
                 onPageChange={handleChangePage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
-                count={roles?.length}
+                count={filteredRoles?.length}
             />
-        </MainCard>
+        </Stack>
     );
 }
 

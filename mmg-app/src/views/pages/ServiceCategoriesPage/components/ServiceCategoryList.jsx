@@ -1,11 +1,8 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo } from 'react';
 import {
     Typography,
     Grid,
     Card,
-    CardContent,
-    CardActions,
     Button,
     Table,
     TableBody,
@@ -13,61 +10,105 @@ import {
     TableContainer,
     TableHead,
     TableRow,
-    Paper,
     TextField,
     Stack,
     IconButton,
     Chip,
-    Select,
-    OutlinedInput,
-    InputAdornment,
+    Box,
     MenuItem,
     CircularProgress,
     TablePagination,
     Divider,
-    Box
+    ToggleButton,
+    ToggleButtonGroup
 } from '@mui/material';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { MdDashboard, MdTableChart } from 'react-icons/md';
 import CategoryFormModal from './CategoryFormModal';
 import category from 'api/category';
 import service from 'api/service';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
-import { debounce } from 'lodash';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
-import FilterAltIcon from '@mui/icons-material/FilterAlt';
+import GridViewOutlinedIcon from '@mui/icons-material/GridViewOutlined';
+import TableRowsOutlinedIcon from '@mui/icons-material/TableRowsOutlined';
 import ScienceOutlinedIcon from '@mui/icons-material/ScienceOutlined';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import PersonOutlineIcon from '@mui/icons-material/PersonOutline';
+import MedicationOutlinedIcon from '@mui/icons-material/MedicationOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
+import BiotechOutlinedIcon from '@mui/icons-material/BiotechOutlined';
+import MonitorHeartOutlinedIcon from '@mui/icons-material/MonitorHeartOutlined';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import LocalPharmacyOutlinedIcon from '@mui/icons-material/LocalPharmacyOutlined';
+import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
+import GraphicEqOutlinedIcon from '@mui/icons-material/GraphicEqOutlined';
+import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
+import BubbleChartOutlinedIcon from '@mui/icons-material/BubbleChartOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import Switch from 'ui-component/switch';
+import { CSVLink } from 'react-csv';
+import moment from 'moment';
 
-const GRID_ITEMS_PER_PAGE = 12;
+const SORT_OPTIONS = [
+    { value: 'name-asc', label: 'Name (A-Z)' },
+    { value: 'name-desc', label: 'Name (Z-A)' },
+    { value: 'tests-desc', label: 'Lab Tests (Most)' },
+    { value: 'tests-asc', label: 'Lab Tests (Fewest)' }
+];
+
+// Icon per category, matched by name (case-insensitive) — falls back to a generic category icon
+// for anything not in this fixed set (see pos-api/app/seeders/product_categories.py).
+const CATEGORY_ICONS = {
+    consultation: PersonOutlineIcon,
+    diagnostic: ScienceOutlinedIcon,
+    medication: MedicationOutlinedIcon,
+    supplies: Inventory2OutlinedIcon,
+    laboratory: BiotechOutlinedIcon,
+    'ecg & spirometry': MonitorHeartOutlinedIcon,
+    others: MoreHorizIcon,
+    'drug testing': LocalPharmacyOutlinedIcon,
+    'professional fee': PaidOutlinedIcon,
+    ultrasound: GraphicEqOutlinedIcon,
+    'x-ray': CameraAltOutlinedIcon,
+    'special chemistry': BubbleChartOutlinedIcon
+};
+
+const getCategoryIcon = (name) => CATEGORY_ICONS[name?.toLowerCase()] || CategoryOutlinedIcon;
+
+// Deterministic color per category (by id) — matches the colors used for the same categories'
+// chips on the Lab Test list, so a category reads consistently across both pages.
+const stringToChipColor = (str) => {
+    let hash = 0;
+    for (let i = 0; i < str?.length; i++) {
+        hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return { bg: `hsl(${hue}, 70%, 92%)`, color: `hsl(${hue}, 55%, 38%)` };
+};
 
 const ServiceCategoryList = () => {
-    const navigate = useNavigate();
     const [viewMode, setViewMode] = useState('card');
-    const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [openModal, setOpenModal] = useState(false);
     const [editingCategory, setEditingCategory] = useState(null);
-    const [selectedStatus, setSelectedStatus] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('all');
+    const [sortBy, setSortBy] = useState('name-asc');
     const [page, setPage] = useState(0);
     const [rowsPerPage, setRowsPerPage] = useState(10);
 
     const queryClient = useQueryClient();
 
-    const { data: categories, isLoading, isError, error } = useQuery('categories', category.GetAllCategories);
+    const { data: categories, isLoading } = useQuery('categories', category.GetAllCategories);
     const { data: services } = useQuery('services', service.GetAllServices);
 
     const labTestCountByCategory = useMemo(() => {
         const counts = {};
         services?.forEach((item) => {
             const categoryId = item?.category?.id;
-            if (categoryId) {
-                counts[categoryId] = (counts[categoryId] || 0) + 1;
-            }
+            if (categoryId) counts[categoryId] = (counts[categoryId] || 0) + 1;
         });
         return counts;
     }, [services]);
@@ -76,25 +117,16 @@ const ServiceCategoryList = () => {
         onMutate: async (newCategory) => {
             await queryClient.cancelQueries('categories');
             const previousCategories = queryClient.getQueryData('categories');
+            const existingCategories = previousCategories?.find((c) => c.name.toLowerCase() === newCategory.name.toLowerCase());
 
-            // Check if a package with the same name already exists
-            const existingCategories = previousCategories?.find(
-                (pkg) => pkg.name.toLowerCase() === newCategory.name.toLowerCase()
-            );
-    
             if (existingCategories) {
-                // If a package with the same name exists, throw an error
                 throw new Error('A category with this name already exists.');
             } else {
-                // If no duplicate found, proceed with creating the new package
                 if (!previousCategories || previousCategories.length === 0) {
-                    // If empty, proceed with creating the new service
                     queryClient.setQueryData('categories', [newCategory]);
                 } else {
-                    // If not empty, append the new service to the existing list
                     queryClient.setQueryData('categories', (old) => [...old, newCategory]);
                 }
-    
                 return { previousCategories };
             }
         },
@@ -117,11 +149,12 @@ const ServiceCategoryList = () => {
         onMutate: async (updatedCategory) => {
             await queryClient.cancelQueries('categories');
             const previousCategories = queryClient.getQueryData('categories');
-
-            queryClient.setQueryData('categories', (old) => old.map((cat) => (cat._id === updatedCategory._id ? updatedCategory : cat)));
+            queryClient.setQueryData('categories', (old) =>
+                old.map((c) => (c._id === updatedCategory._id ? { ...c, ...updatedCategory } : c))
+            );
             return { previousCategories };
         },
-        onError: (err) => {
+        onError: () => {
             toast.error('An error occurred while updating the category.');
         },
         onSuccess: () => {
@@ -132,24 +165,9 @@ const ServiceCategoryList = () => {
         }
     });
 
-    const handleSwitchView = (mode) => {
-        setViewMode(mode);
-        setPage(0);
-    };
-
-    const debouncedSetSearchQuery = useRef(debounce((value) => setSearchQuery(value), 300)).current;
-
     const handleSearch = (event) => {
-        setSearchInput(event.target.value);
+        setSearchQuery(event.target.value);
         setPage(0);
-        debouncedSetSearchQuery(event.target.value);
-    };
-
-    const handleClearSearch = () => {
-        setSearchInput('');
-        setSearchQuery('');
-        setPage(0);
-        debouncedSetSearchQuery.cancel();
     };
 
     const handleStatusChange = (event) => {
@@ -163,21 +181,20 @@ const ServiceCategoryList = () => {
     };
 
     const handleEditCategory = (id) => {
-        const category = categories.find((c) => c._id === id);
-        if (category) {
-            setEditingCategory({
-                id: category._id,
-                name: category.name,
-                description: category.description,
-                isActive: category.isActive
-            });
-            setOpenModal(true); // Open the modal for editing
+        const found = categories.find((c) => c._id === id);
+        if (found) {
+            setEditingCategory({ id: found._id, name: found.name, description: found.description, isActive: found.isActive });
+            setOpenModal(true);
         }
     };
 
-    const handleCloseModal = () => {
-        setOpenModal(false);
+    // The list/table view's Active switch flips status inline without opening the full modal —
+    // reuses the same edit mutation and payload shape as the modal's full edit.
+    const handleToggleActive = (cat, nextValue) => {
+        editCategoryMutation.mutate({ id: cat._id, name: cat.name, description: cat.description, isActive: nextValue });
     };
+
+    const handleCloseModal = () => setOpenModal(false);
 
     const handleSubmitForm = async (data) => {
         try {
@@ -192,296 +209,355 @@ const ServiceCategoryList = () => {
         }
     };
 
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
-    };
+    const handleChangePage = (event, newPage) => setPage(newPage);
 
     const handleChangeRowsPerPage = (event) => {
         setRowsPerPage(parseInt(event.target.value, 10));
         setPage(0);
     };
 
-    const filteredCategory = useMemo(() => {
-        return categories?.filter(
-            (category) =>
-                category.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-                (selectedStatus === '' || category.isActive === selectedStatus)
+    const filteredCategories = useMemo(() => {
+        const query = searchQuery.toLowerCase();
+        const filtered = (categories || []).filter(
+            (cat) =>
+                (cat.name.toLowerCase().includes(query) || cat.description?.toLowerCase().includes(query)) &&
+                (selectedStatus === 'all' || cat.isActive === (selectedStatus === 'active'))
         );
-    }, [categories, searchQuery, selectedStatus]);
 
-    const uniqueStatus = useMemo(() => {
-        return [...new Set(categories?.map((category) => category?.isActive))];
-    }, [categories]);
+        const [field, direction] = sortBy.split('-');
+        const sorted = [...filtered].sort((a, b) => {
+            let result = 0;
+            if (field === 'name') {
+                result = a.name.localeCompare(b.name);
+            } else if (field === 'tests') {
+                result = (labTestCountByCategory[a._id] || 0) - (labTestCountByCategory[b._id] || 0);
+            }
+            return direction === 'desc' ? -result : result;
+        });
 
-    const renderWrapper = (children) => (
-        <div>
-            <Stack
-                direction={{ xs: 'column', sm: 'row' }}
-                alignItems={{ xs: 'stretch', sm: 'center' }}
-                justifyContent="space-between"
-                spacing={2}
-                mb={3}
-            >
-                <Stack
-                    direction={{ xs: 'column', sm: 'row' }}
-                    alignItems={{ xs: 'stretch', sm: 'center' }}
-                    spacing={1.5}
-                    sx={{
-                        p: 1,
-                        borderRadius: 2,
-                        bgcolor: 'grey.50',
-                        border: '1px solid',
-                        borderColor: 'grey.200'
-                    }}
-                >
-                    <TextField
-                        placeholder="Search by name"
-                        variant="outlined"
-                        value={searchInput}
-                        onChange={handleSearch}
-                        size="small"
-                        sx={{ minWidth: { sm: 240 }, '& .MuiOutlinedInput-root': { borderRadius: 2, bgcolor: 'background.paper' } }}
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start">
-                                    <SearchIcon fontSize="small" color="action" />
-                                </InputAdornment>
-                            ),
-                            endAdornment: searchInput && (
-                                <InputAdornment position="end">
-                                    <IconButton size="small" onClick={handleClearSearch} edge="end" aria-label="Clear search">
-                                        <ClearIcon fontSize="small" />
-                                    </IconButton>
-                                </InputAdornment>
-                            )
-                        }}
-                    />
-                    <Select
-                        value={selectedStatus}
-                        onChange={handleStatusChange}
-                        displayEmpty
-                        size="small"
-                        sx={{ minWidth: { sm: 190 }, borderRadius: 2, bgcolor: 'background.paper' }}
-                        input={
-                            <OutlinedInput
-                                startAdornment={
-                                    <InputAdornment position="start">
-                                        <FilterAltIcon fontSize="small" color="action" />
-                                    </InputAdornment>
-                                }
-                            />
-                        }
-                    >
-                        <MenuItem value="">All Status</MenuItem>
-                        {uniqueStatus.map((status) => (
-                            <MenuItem key={status} value={status}>
-                                {status ? 'Active' : 'In-active'}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </Stack>
-                <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={1}>
-                    {viewMode === 'table' ? (
-                        <Button
-                            variant="outlined"
-                            onClick={() => handleSwitchView('card')}
-                            startIcon={<MdDashboard style={{ marginRight: '3px' }} />}
-                        >
-                            View in Grid
+        return sorted;
+    }, [categories, searchQuery, selectedStatus, sortBy, labTestCountByCategory]);
+
+    const csvData = useMemo(
+        () =>
+            filteredCategories.map((cat) => ({
+                Name: cat.name,
+                Description: cat.description,
+                'Lab Tests': labTestCountByCategory[cat._id] || 0,
+                Active: cat.isActive ? 'Active' : 'Inactive'
+            })),
+        [filteredCategories, labTestCountByCategory]
+    );
+
+    const paginated = filteredCategories.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+    const renderHeader = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Typography variant="h2" fontWeight={600}>
+                            Diagnostics Categories
+                        </Typography>
+                        <Chip
+                            size="small"
+                            label={`${(categories?.length || 0).toLocaleString()} Categories`}
+                            sx={{ bgcolor: 'primary.light', color: 'primary.dark', fontWeight: 500 }}
+                        />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" mt={0.5}>
+                        Manage laboratory departments, diagnostic groupings, and service categories.
+                    </Typography>
+                </Box>
+                <Stack direction="row" spacing={1.5}>
+                    <CSVLink data={csvData} filename={`lab-test-categories-${moment().format('YYYY-MM-DD')}.csv`} style={{ textDecoration: 'none' }}>
+                        <Button variant="outlined" color="inherit" startIcon={<DescriptionOutlinedIcon />}>
+                            Export CSV
                         </Button>
-                    ) : (
-                        <Button
-                            variant="outlined"
-                            onClick={() => handleSwitchView('table')}
-                            startIcon={<MdTableChart style={{ marginRight: '3px' }} />}
-                        >
-                            View in List
-                        </Button>
-                    )}
+                    </CSVLink>
                     <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleNewCategory}>
                         New Category
                     </Button>
                 </Stack>
-            </Stack>
-            {children}
-
-            <CategoryFormModal open={openModal} onClose={handleCloseModal} onSubmit={handleSubmitForm} category={editingCategory} />
-        </div>
+            </Box>
+        </Card>
     );
 
-    const renderCardView = (children) =>
-        renderWrapper(
-            children ?? (
-                <div>
-                    <ToastContainer />
-                    <Grid container spacing={2}>
-                        {filteredCategory
-                            ?.slice(page * GRID_ITEMS_PER_PAGE, page * GRID_ITEMS_PER_PAGE + GRID_ITEMS_PER_PAGE)
-                            .map((category) => (
-                            <Grid item key={category._id} xs={12} sm={6} md={4} lg={3}>
-                                <Card
-                                    style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#F5F5F7' }}
-                                    variant="outlined"
-                                >
-                                    <CardContent style={{ flex: '1 1 auto' }}>
-                                        <Stack direction="column" justifyContent="flex-start" alignItems="flex-start" spacing={1.25}>
-                                            <Chip
-                                                label={category.isActive ? 'Active' : 'In-active'}
-                                                size="small"
-                                                variant="outlined"
-                                                color={category.isActive ? 'primary' : 'error'}
-                                            />
-                                            <Box>
-                                                <Typography
-                                                    variant="h3"
-                                                    component="div"
+    const renderFilters = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5 }}>
+                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'stretch', md: 'center' }} justifyContent="space-between">
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flex={1}>
+                        <TextField
+                            size="small"
+                            placeholder="Search category name or description..."
+                            value={searchQuery}
+                            onChange={handleSearch}
+                            sx={{ flex: 1, minWidth: 260 }}
+                            InputProps={{
+                                startAdornment: <SearchIcon fontSize="small" color="action" sx={{ mr: 1 }} />,
+                                endAdornment: searchQuery ? (
+                                    <IconButton size="small" onClick={() => setSearchQuery('')}>
+                                        <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                ) : null
+                            }}
+                        />
+                        <TextField select size="small" value={selectedStatus} onChange={handleStatusChange} sx={{ minWidth: 150 }}>
+                            <MenuItem value="all">All Status</MenuItem>
+                            <MenuItem value="active">Active</MenuItem>
+                            <MenuItem value="inactive">Inactive</MenuItem>
+                        </TextField>
+                    </Stack>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="body2" color="text.secondary" whiteSpace="nowrap">
+                                Sort by:
+                            </Typography>
+                            <TextField
+                                select
+                                size="small"
+                                variant="standard"
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                InputProps={{ disableUnderline: true }}
+                                sx={{ minWidth: 170 }}
+                            >
+                                {SORT_OPTIONS.map((option) => (
+                                    <MenuItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </MenuItem>
+                                ))}
+                            </TextField>
+                        </Stack>
+                        <ToggleButtonGroup
+                            exclusive
+                            size="small"
+                            value={viewMode}
+                            onChange={(e, value) => {
+                                if (value) {
+                                    setViewMode(value);
+                                    setPage(0);
+                                }
+                            }}
+                        >
+                            <ToggleButton value="card">
+                                <GridViewOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} />
+                                Grid View
+                            </ToggleButton>
+                            <ToggleButton value="table">
+                                <TableRowsOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} />
+                                List View
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    </Stack>
+                </Stack>
+            </Box>
+        </Card>
+    );
+
+    const renderPagination = () => (
+        <TablePagination
+            component="div"
+            count={filteredCategories.length}
+            page={page}
+            onPageChange={handleChangePage}
+            rowsPerPage={rowsPerPage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+        />
+    );
+
+    const renderEmptyState = () => (
+        <Stack alignItems="center" py={6}>
+            <Typography color="text.secondary" variant="h5">
+                No categories to display. Try checking your filters
+            </Typography>
+        </Stack>
+    );
+
+    const renderCardView = () => (
+        <Card sx={{ overflow: 'hidden' }}>
+            <Box sx={{ p: 3 }}>
+                {paginated.length === 0 ? (
+                    renderEmptyState()
+                ) : (
+                    <Grid container spacing={2.5}>
+                        {paginated.map((cat) => {
+                            const Icon = getCategoryIcon(cat.name);
+                            const style = stringToChipColor(cat._id);
+                            const testCount = labTestCountByCategory[cat._id] || 0;
+                            return (
+                                <Grid item key={cat._id} xs={12} sm={6} md={4} lg={3}>
+                                    <Card variant="outlined" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                                        <Box sx={{ p: 2.5, flex: 1 }}>
+                                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={1.5}>
+                                                <Chip
+                                                    label={cat.isActive ? 'Active' : 'Inactive'}
+                                                    size="small"
+                                                    color={cat.isActive ? 'success' : 'default'}
+                                                    variant={cat.isActive ? 'filled' : 'outlined'}
+                                                />
+                                                <Box
                                                     sx={{
+                                                        width: 36,
+                                                        height: 36,
+                                                        borderRadius: '50%',
+                                                        bgcolor: style.bg,
+                                                        color: style.color,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center'
+                                                    }}
+                                                >
+                                                    <Icon fontSize="small" />
+                                                </Box>
+                                            </Stack>
+                                            <Typography variant="subtitle1" fontWeight={700}>
+                                                {cat.name}
+                                            </Typography>
+                                            {cat.description && (
+                                                <Typography
+                                                    variant="body2"
+                                                    color="text.secondary"
+                                                    sx={{
+                                                        mt: 0.5,
                                                         display: '-webkit-box',
                                                         WebkitLineClamp: 2,
                                                         WebkitBoxOrient: 'vertical',
                                                         overflow: 'hidden'
                                                     }}
                                                 >
-                                                    {category.name}
+                                                    {cat.description}
                                                 </Typography>
-                                                {category.description && (
-                                                    <Typography
-                                                        variant="body2"
-                                                        color="text.secondary"
-                                                        sx={{
-                                                            mt: 0.5,
-                                                            display: '-webkit-box',
-                                                            WebkitLineClamp: 2,
-                                                            WebkitBoxOrient: 'vertical',
-                                                            overflow: 'hidden'
-                                                        }}
-                                                    >
-                                                        {category.description}
+                                            )}
+                                            <Divider sx={{ my: 1.5 }} />
+                                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                                <Stack direction="row" spacing={0.75} alignItems="center">
+                                                    <ScienceOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        {testCount} lab test{testCount === 1 ? '' : 's'}
                                                     </Typography>
-                                                )}
-                                            </Box>
-                                            <Divider sx={{ width: '100%' }} />
-                                            <Stack direction="row" spacing={0.75} alignItems="center">
-                                                <ScienceOutlinedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
-                                                <Typography variant="body2" color="text.secondary">
-                                                    {labTestCountByCategory[category._id] || 0} lab test
-                                                    {labTestCountByCategory[category._id] === 1 ? '' : 's'}
-                                                </Typography>
+                                                </Stack>
+                                                <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => handleEditCategory(cat._id)}>
+                                                    Edit
+                                                </Button>
                                             </Stack>
-                                        </Stack>
-                                    </CardContent>
-                                    <CardActions style={{ flexShrink: 0 }}>
-                                        <Stack
-                                            direction="row"
-                                            justifyContent="space-between"
-                                            alignItems="center"
-                                            spacing={2}
-                                            sx={{ width: '100%' }}
-                                        >
-                                            <Button
-                                                variant="outlined"
-                                                size="small"
-                                                sx={{ borderColor: 'grey.400', backgroundColor: 'white' }}
-                                                onClick={() => handleEditCategory(category._id)}
-                                                startIcon={<EditIcon />}
-                                            >
-                                                Edit
-                                            </Button>
-                                        </Stack>
-                                    </CardActions>
-                                </Card>
-                            </Grid>
-                        ))}
+                                        </Box>
+                                    </Card>
+                                </Grid>
+                            );
+                        })}
                     </Grid>
-                    <div style={{ flex: '0 1 auto' }}>
-                        <TablePagination
-                            component="div"
-                            count={filteredCategory?.length}
-                            page={page}
-                            onPageChange={handleChangePage}
-                            rowsPerPage={GRID_ITEMS_PER_PAGE}
-                            rowsPerPageOptions={[GRID_ITEMS_PER_PAGE]}
-                        />
-                    </div>
-                </div>
-            )
-        );
+                )}
+            </Box>
+            {renderPagination()}
+        </Card>
+    );
 
-    const renderTableView = (children) =>
-        renderWrapper(
-            <div>
-                <ToastContainer />
-                <TableContainer component={Paper}>
-                    <Table>
-                        <TableHead>
+    const renderTableView = () => (
+        <Card sx={{ overflow: 'hidden' }}>
+            <TableContainer>
+                <Table>
+                    <TableHead>
+                        <TableRow sx={{ bgcolor: 'grey.50' }}>
+                            {['Name', 'Description', 'Lab Tests Count', 'Active', 'Action'].map((head) => (
+                                <TableCell
+                                    key={head}
+                                    align={head === 'Action' ? 'right' : 'left'}
+                                    sx={{ fontSize: '0.75rem', fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5 }}
+                                >
+                                    {head.toUpperCase()}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {paginated.length === 0 && (
                             <TableRow>
-                                <TableCell>Name</TableCell>
-                                <TableCell>Description</TableCell>
-                                <TableCell>Active</TableCell>
-                                <TableCell>Action</TableCell>
+                                <TableCell colSpan={5}>{renderEmptyState()}</TableCell>
                             </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {filteredCategory?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((category) => (
-                                <TableRow key={category._id}>
-                                    <TableCell>{category.name}</TableCell>
-                                    <TableCell dangerouslySetInnerHTML={{ __html: category.description }} />
+                        )}
+                        {paginated.map((cat) => {
+                            const Icon = getCategoryIcon(cat.name);
+                            const style = stringToChipColor(cat._id);
+                            const testCount = labTestCountByCategory[cat._id] || 0;
+                            return (
+                                <TableRow key={cat._id} hover>
                                     <TableCell>
-                                        <Switch readOnly checked={category.isActive} />
+                                        <Stack direction="row" spacing={1.5} alignItems="center">
+                                            <Box
+                                                sx={{
+                                                    width: 32,
+                                                    height: 32,
+                                                    borderRadius: '50%',
+                                                    bgcolor: style.bg,
+                                                    color: style.color,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}
+                                            >
+                                                <Icon fontSize="small" />
+                                            </Box>
+                                            <Typography variant="body2" fontWeight={600}>
+                                                {cat.name}
+                                            </Typography>
+                                        </Stack>
+                                    </TableCell>
+                                    <TableCell sx={{ maxWidth: 320 }}>
+                                        <Typography variant="body2" color="text.secondary" dangerouslySetInnerHTML={{ __html: cat.description || '' }} />
                                     </TableCell>
                                     <TableCell>
+                                        <Chip label={`${testCount} Lab Test${testCount === 1 ? '' : 's'}`} size="small" variant="outlined" />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Switch checked={cat.isActive} onChange={(e) => handleToggleActive(cat, e.target.checked)} />
+                                    </TableCell>
+                                    <TableCell align="right">
                                         <Button
                                             variant="outlined"
                                             size="small"
                                             color="primary"
-                                            onClick={() => handleEditCategory(category._id)}
-                                            startIcon={<EditIcon />}
+                                            onClick={() => handleEditCategory(cat._id)}
+                                            startIcon={<EditIcon fontSize="small" />}
                                         >
                                             Edit
                                         </Button>
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                    {children}
-                </TableContainer>
-                <div style={{ flex: '0 1 auto' }}>
-                    <TablePagination
-                        component="div"
-                        count={filteredCategory?.length}
-                        page={page}
-                        onPageChange={handleChangePage}
-                        rowsPerPage={rowsPerPage}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                    />
-                </div>
-            </div>
-        );
-
-    const renderMessage = (children) => (
-        <Stack alignItems="center" my={4}>
-            {children}
-        </Stack>
+                            );
+                        })}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+            {renderPagination()}
+        </Card>
     );
 
-    const renderView = viewMode === 'card' ? renderCardView : renderTableView;
-
     if (isLoading) {
-        return renderView(renderMessage(<CircularProgress size={28} />));
-    }
-
-    if (!filteredCategory || filteredCategory.length === 0) {
-        return renderView(
-            renderMessage(
-                <Typography color="lightgray" variant="h5">
-                    No available data to display. Try checking your filters
-                </Typography>
-            )
+        return (
+            <Stack spacing={2.5}>
+                <ToastContainer />
+                {renderHeader()}
+                {renderFilters()}
+                <Stack alignItems="center" py={6}>
+                    <CircularProgress size={28} />
+                </Stack>
+            </Stack>
         );
     }
 
-    return renderView();
+    return (
+        <Stack spacing={2.5}>
+            <ToastContainer />
+            {renderHeader()}
+            {renderFilters()}
+            {viewMode === 'card' ? renderCardView() : renderTableView()}
+            <CategoryFormModal open={openModal} onClose={handleCloseModal} onSubmit={handleSubmitForm} category={editingCategory} />
+        </Stack>
+    );
 };
 
 export default ServiceCategoryList;

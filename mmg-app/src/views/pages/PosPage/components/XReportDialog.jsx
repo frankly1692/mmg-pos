@@ -60,9 +60,6 @@ export default ({ open, report, onClose, disableActions }) => {
                     <Button color="primary" onClick={() => navigate('/dashboard/cashier-reports')}>
                         Go to dashboard
                     </Button>
-                    <Button color="primary" onClick={() => navigate('/dashboard/branch-reports/new')}>
-                        Generate Report
-                    </Button>
                 </DialogActions>
             )}
         </Dialog>

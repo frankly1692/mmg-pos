@@ -107,7 +107,7 @@ async function GetAllTransaction(params) {
 }
 
 async function GetActiveTransaction() {
-    const { data: { data } } = await server.get(TRANSACTION_ENDPOINTS + '/v2/transaction/active')
+    const { data: { data } } = await server.get(TRANSACTION_ENDPOINTS + '/v2/transactions/active')
     return data;
 }
 

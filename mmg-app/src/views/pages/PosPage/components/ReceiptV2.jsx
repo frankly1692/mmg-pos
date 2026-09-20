@@ -139,7 +139,7 @@ export default function ({ transaction }) {
                             const discount = transaction.discounts.filter(item => pack?._id ? item.packageId == pack._id : true)?.[0]
 
                             return (
-                                <>
+                                <React.Fragment key={pack?._id ?? `no-package-${index}`}>
                                     {pack && (
                                         <Grid item xs={12}>
                                             <Typography variant="h5" fontWeight='medium' >
@@ -148,8 +148,8 @@ export default function ({ transaction }) {
                                         </Grid>
                                     )}
 
-                                    {transactionItems.map((item) => (
-                                        <>
+                                    {transactionItems.map((item, itemIndex) => (
+                                        <React.Fragment key={item._id ?? `${pack?._id ?? index}-${itemIndex}`}>
                                             <Grid item xs={6}><Typography ml={pack ? 3 : 0}>{item.name}</Typography></Grid>
                                             <Grid item xs={2}><Typography >({item.quantity})</Typography></Grid>
                                             <Grid item xs={2}>
@@ -164,7 +164,7 @@ export default function ({ transaction }) {
                                                     {item.price.toFixed(2)}
                                                 </Typography>
                                             </Grid>
-                                        </>
+                                        </React.Fragment>
                                     ))}
                                     {
                                         pack && discount && !discount?.memberType && (
@@ -178,7 +178,7 @@ export default function ({ transaction }) {
                                             </Grid>
                                         )
                                     }
-                                </>
+                                </React.Fragment>
                             );
                         })}
                 </Grid>

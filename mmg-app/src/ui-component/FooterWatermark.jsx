@@ -4,7 +4,7 @@ import BirLogo from './BirLogo';
 
 export default () => {
     return (
-        <Box position="fixed" bottom={20} right={20}>
+        <Box position="fixed" bottom={20} right={20} sx={{ pointerEvents: 'none' }}>
             <Stack direction="row" alignItems="center" sx={{ opacity: 0.5 }}>
                 <Typography variant="h5" color="grey.600">
                     Powered by

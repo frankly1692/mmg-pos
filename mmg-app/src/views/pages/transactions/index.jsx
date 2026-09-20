@@ -8,18 +8,17 @@ import {
     TableBody,
     TableCell,
     Table,
-    Paper,
     Card,
     CircularProgress,
     Chip,
     MenuItem,
     Box,
     Button,
-    TablePagination
+    TablePagination,
+    IconButton
 } from '@mui/material';
 import { useQuery } from 'react-query';
 import _, { omit, pick, startCase, toLower, upperCase } from 'lodash';
-import MainCard from 'ui-component/cards/MainCard';
 import transaction from 'api/transaction';
 import moment from 'moment';
 import UpdateTransactionModal from './components/UpdateTransactionModal';
@@ -27,9 +26,10 @@ import { StatusOptions } from './components/StatusSelector';
 import { useCallback, useEffect, useState } from 'react';
 import { LocalizationProvider, DatePicker } from '@mui/x-date-pickers';
 import { AdapterMoment } from '@mui/x-date-pickers/AdapterMoment';
-import { FaPesoSign } from 'react-icons/fa6';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import { useAuth } from 'providers/AuthProvider';
-import Currency from 'ui-component/Currency';
 import BranchFilter from 'ui-component/filter/BranchFilter';
 import Role from 'utils/Role';
 import { DateFilterEnum, DateFilterOptions } from 'ui-component/filter/DateFilter';
@@ -48,11 +48,9 @@ function TransactionsPage() {
     const hasOnlyOneBranch = user?.branches?.length == 1;
     const hasMultipleBranch = user?.branches?.length > 1;
 
-    const [branchFilter, setBranchFilter] = useState(
-        matchRole(Role.ADMIN) || hasMultipleBranch ? DEFAULT_FILTER : branch?.name
-    );
+    const [branchFilter, setBranchFilter] = useState(matchRole(Role.ADMIN) || hasMultipleBranch ? DEFAULT_FILTER : branch?.name);
 
-    const filterByUser = matchRole(Role.ADMIN) || hasMultipleBranch
+    const filterByUser = matchRole(Role.ADMIN) || hasMultipleBranch;
 
     const fileName = generateReportFilename('transactions', { branchFilter, dateFilter, customDate }) + '.csv';
 
@@ -68,10 +66,10 @@ function TransactionsPage() {
 
     const { data, isLoading, isRefetching } = useQuery({
         queryKey: ['transactions', dateFilter, customDate],
-        queryFn: () => transaction.GetAllTransaction(params),
+        queryFn: () => transaction.GetAllTransaction(params)
     });
 
-    const [searchFilter, setSearchFilter] = useState(null);
+    const [searchFilter, setSearchFilter] = useState('');
     const [transactions, setTransactions] = useState(data);
     const [statusFilter, setStatusFilter] = useState(DEFAULT_FILTER);
     const [page, setPage] = useState(0);
@@ -80,8 +78,7 @@ function TransactionsPage() {
     useEffect(() => {
         let transactions = data || [];
 
-        if (statusFilter && statusFilter != DEFAULT_FILTER)
-            transactions = transactions?.filter((transaction) => transaction.status == statusFilter);
+        if (statusFilter && statusFilter != DEFAULT_FILTER) transactions = transactions?.filter((transaction) => transaction.status == statusFilter);
 
         if (searchFilter) {
             transactions = transactions?.filter(
@@ -120,16 +117,13 @@ function TransactionsPage() {
             const isCompleted = ['completed'].includes(item.status);
             const isRefundedOrCancelled = ['refunded', 'cancelled'].includes(item.status);
 
-            const invoiceNumber = isCompleted || (item.invoiceNumber && !item.serialNumber)
-                ? String(item.invoiceNumber).padStart(6, '0')
-                : '';
+            const invoiceNumber =
+                isCompleted || (item.invoiceNumber && !item.serialNumber) ? String(item.invoiceNumber).padStart(6, '0') : '';
 
-            const referenceNumber = isRefundedOrCancelled && item.serialNumber
-                ? String(item.invoiceNumber).padStart(6, '0')
-                : '';
+            const referenceNumber = isRefundedOrCancelled && item.serialNumber ? String(item.invoiceNumber).padStart(6, '0') : '';
 
             // Extract discount names
-            const discountNames = item.discounts?.map(d => d.name || startCase(d.memberType)).filter(Boolean).join(', ') || '';
+            const discountNames = item.discounts?.map((d) => d.name || startCase(d.memberType)).filter(Boolean).join(', ') || '';
 
             // Values
             const grossSale = !['cancelled'].includes(item.status) || !item.serialNumber ? item.totalSalesWithoutMemberDiscount?.toFixed(2) : '0.00';
@@ -160,9 +154,8 @@ function TransactionsPage() {
         return [headers, ...data];
     }, [transactions]);
 
-
     const resetFilters = () => {
-        setSearchFilter(null);
+        setSearchFilter('');
         setStatusFilter(DEFAULT_FILTER);
         setBranchFilter(DEFAULT_FILTER);
         setDateFilter(DateFilterEnum.TODAY);
@@ -177,17 +170,58 @@ function TransactionsPage() {
         setPage(0);
     };
 
-    const renderTable = (children) => (
-        <PrinterProvider>
-            <MainCard title="Transactions">
+    const renderHeader = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Typography variant="h2" fontWeight={600}>
+                            Transactions
+                        </Typography>
+                        <Chip
+                            size="small"
+                            label={`${(transactions?.length || 0).toLocaleString()} Transactions`}
+                            sx={{ bgcolor: 'primary.light', color: 'primary.dark', fontWeight: 500 }}
+                        />
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary" mt={0.5}>
+                        Review sales, cancellations, refunds, and held transactions across the register.
+                    </Typography>
+                </Box>
+                {!transactions || transactions?.length == 0 || isLoading ? (
+                    <Button variant="outlined" color="inherit" startIcon={<DescriptionOutlinedIcon />} disabled>
+                        Export CSV
+                    </Button>
+                ) : (
+                    <CSVLink data={exportToCSV()} filename={fileName} style={{ textDecoration: 'none' }}>
+                        <Button variant="outlined" color="inherit" startIcon={<DescriptionOutlinedIcon />}>
+                            Export CSV
+                        </Button>
+                    </CSVLink>
+                )}
+            </Box>
+        </Card>
+    );
+
+    const renderFilters = () => (
+        <Card>
+            <Box sx={{ px: 3, py: 2.5 }}>
                 <LocalizationProvider dateAdapter={AdapterMoment}>
-                    <Stack mb={1} spacing={1} direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                    <Stack spacing={1.5} direction={{ xs: 'column', md: 'row' }} alignItems={{ xs: 'stretch', md: 'center' }} flexWrap="wrap" useFlexGap>
                         <TextField
                             value={searchFilter}
                             onChange={(e) => setSearchFilter(e.target?.value)}
                             size="small"
-                            label="Search"
-                            sx={{ minWidth: 300 }}
+                            placeholder="Search by transaction # or customer..."
+                            sx={{ minWidth: 260 }}
+                            InputProps={{
+                                startAdornment: <SearchIcon fontSize="small" color="action" sx={{ mr: 1 }} />,
+                                endAdornment: searchFilter ? (
+                                    <IconButton size="small" onClick={() => setSearchFilter('')}>
+                                        <ClearIcon fontSize="small" />
+                                    </IconButton>
+                                ) : null
+                            }}
                         />
                         <TextField
                             select
@@ -198,9 +232,7 @@ function TransactionsPage() {
                             sx={{ minWidth: 150 }}
                         >
                             <MenuItem value={DEFAULT_FILTER}>All</MenuItem>
-                            {data &&
-                                ['completed', 'hold', 'cancelled', 'refunded']
-                                    .map((status) => <MenuItem value={status}>{startCase(status)}</MenuItem>)}
+                            {data && ['completed', 'hold', 'cancelled', 'refunded'].map((status) => <MenuItem key={status} value={status}>{startCase(status)}</MenuItem>)}
                         </TextField>
                         <BranchFilter
                             filter={branchFilter}
@@ -209,9 +241,9 @@ function TransactionsPage() {
                             setValues={setTransactions}
                             {...(matchRole(Role.CASHIER)
                                 ? {
-                                    options: user?.branches?.map((branch) => branch.name),
-                                    disabled: hasOnlyOneBranch
-                                }
+                                      options: user?.branches?.map((branch) => branch.name),
+                                      disabled: hasOnlyOneBranch
+                                  }
                                 : {})}
                         />
                         <TextField
@@ -226,7 +258,9 @@ function TransactionsPage() {
                             sx={{ minWidth: 200 }}
                         >
                             {DateFilterOptions.map((option) => (
-                                <MenuItem value={option.value}>{option.label}</MenuItem>
+                                <MenuItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </MenuItem>
                             ))}
                         </TextField>
                         {dateFilter == DateFilterEnum.CUSTOM_DATE && (
@@ -238,9 +272,7 @@ function TransactionsPage() {
                                 views={['year', 'month']}
                                 slotProps={{
                                     textField: { size: 'small' },
-                                    actionBar: {
-                                        actions: ['clear', 'today', 'accept']
-                                    }
+                                    actionBar: { actions: ['clear', 'today', 'accept'] }
                                 }}
                             />
                         )}
@@ -254,9 +286,7 @@ function TransactionsPage() {
                                     views={['year', 'month', 'day']}
                                     slotProps={{
                                         textField: { size: 'small' },
-                                        actionBar: {
-                                            actions: ['clear', 'today', 'accept']
-                                        }
+                                        actionBar: { actions: ['clear', 'today', 'accept'] }
                                     }}
                                     label="Start Date"
                                 />
@@ -271,154 +301,137 @@ function TransactionsPage() {
                                     views={['year', 'month', 'day']}
                                     slotProps={{
                                         textField: { size: 'small' },
-                                        actionBar: {
-                                            actions: ['clear', 'today', 'accept']
-                                        }
+                                        actionBar: { actions: ['clear', 'today', 'accept'] }
                                     }}
                                     label="End Date"
                                 />
                             </>
                         )}
-                        <Button variant="contained" onClick={resetFilters}>
+                        <Button variant="outlined" color="inherit" onClick={resetFilters}>
                             Reset
                         </Button>
-                        <Box flex={1} />
-                        {!transactions || transactions?.length == 0 || isLoading ? (
-                            <Button variant="outlined" disabled>
-                                Export CSV
-                            </Button>
-                        ) : (
-                            <CSVLink data={exportToCSV()} filename={fileName} style={{ textDecoration: 'none' }}>
-                                <Button variant="outlined">Export CSV</Button>
-                            </CSVLink>
-                        )}
                     </Stack>
-                    <Typography ml={1} mb={1} fontStyle="italic" color="gray">
-                        {transactions?.length} transactions
-                    </Typography>
                 </LocalizationProvider>
+            </Box>
+        </Card>
+    );
 
-                <Card sx={{ borderRadius: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <TableContainer component={Paper}>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ textWrap: 'nowrap' }}>#</TableCell>
-                                    <TableCell sx={{ textWrap: 'nowrap' }}>Invoice #</TableCell>
-                                    {/* <TableCell sx={{ textWrap: 'nowrap' }}>Serial #</TableCell> */}
-                                    <TableCell sx={{ textWrap: 'nowrap' }}>Reference #</TableCell>
-                                    <TableCell>Status</TableCell>
-                                    {/* <TableCell>Requested By</TableCell>
-                                <TableCell>Referred By</TableCell> */}
-
+    const renderTable = () => (
+        <Card sx={{ overflow: 'hidden' }}>
+            <TableContainer>
+                <Table>
+                    <TableHead>
+                        <TableRow sx={{ bgcolor: 'grey.50' }}>
+                            {[
+                                '#',
+                                'Invoice #',
+                                'Reference #',
+                                'Status',
+                                ...(filterByUser ? ['Branch', 'Cashier'] : []),
+                                'Customer',
+                                'Gross Sale',
+                                'Member Discount',
+                                'Net Sale',
+                                'Date',
+                                'Action'
+                            ].map((head) => (
+                                <TableCell
+                                    key={head}
+                                    align={head === 'Action' ? 'right' : 'left'}
+                                    sx={{ fontSize: '0.75rem', fontWeight: 700, color: 'text.secondary', letterSpacing: 0.5, textWrap: 'nowrap' }}
+                                >
+                                    {head.toUpperCase()}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {!isLoading &&
+                            transactions?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((transaction) => (
+                                <TableRow key={transaction._id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                                    <TableCell>{transaction.transactionNumber}</TableCell>
+                                    <TableCell>
+                                        {['completed'].includes(transaction.status) || (transaction.invoiceNumber && !transaction.serialNumber)
+                                            ? String(transaction.invoiceNumber).padStart(6, '0')
+                                            : ''}
+                                    </TableCell>
+                                    <TableCell>
+                                        {['refunded', 'cancelled'].includes(transaction.status) && transaction.serialNumber
+                                            ? String(transaction.invoiceNumber).padStart(6, '0')
+                                            : null}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={upperCase(transaction.status)}
+                                            size="small"
+                                            variant="outlined"
+                                            color={
+                                                transaction.status === 'completed' ? 'success' : transaction.status === 'hold' ? 'info' : 'error'
+                                            }
+                                        />
+                                    </TableCell>
                                     {filterByUser && (
                                         <>
-                                            <TableCell sx={{ textWrap: 'nowrap' }}>Branch</TableCell>
-                                            <TableCell>Cashier</TableCell>
+                                            <TableCell>{transaction.branch.name}</TableCell>
+                                            <TableCell>{transaction.cashier.name}</TableCell>
                                         </>
                                     )}
-
-                                    <TableCell>Customer</TableCell>
-                                    <TableCell>Gross Sale</TableCell>
-                                    <TableCell>Member Discount</TableCell>
-                                    <TableCell>Net Sale</TableCell>
-                                    <TableCell>Date</TableCell>
-                                    <TableCell sx={{ pl: 0, py: 0 }}>
-                                        <Stack alignItems="end">
-                                            <CircularProgress sx={{ visibility: isRefetching ? 'visible' : 'hidden' }} size={24} />
-                                        </Stack>
+                                    <TableCell>{transaction.customer.name}</TableCell>
+                                    <TableCell sx={{ textWrap: 'nowrap' }}>
+                                        {!['cancelled'].includes(transaction.status) || !transaction.serialNumber
+                                            ? transaction.totalSalesWithoutMemberDiscount.toFixed(2)
+                                            : null}
+                                    </TableCell>
+                                    <TableCell sx={{ textWrap: 'nowrap' }}>
+                                        {!['cancelled'].includes(transaction.status) || !transaction.serialNumber
+                                            ? transaction.totalMemberDiscount.toFixed(2)
+                                            : null}
+                                    </TableCell>
+                                    <TableCell sx={{ textWrap: 'nowrap' }}>
+                                        {transaction.status != 'cancelled' || !transaction.serialNumber ? transaction.totalNetSales.toFixed(2) : null}
+                                    </TableCell>
+                                    <TableCell sx={{ textWrap: 'nowrap' }}>{moment(transaction.transactionDate).format('YYYY-MM-DD hh:mmA')}</TableCell>
+                                    <TableCell align="right">
+                                        <TransactionModal transaction={transaction} />
                                     </TableCell>
                                 </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {!isLoading && transactions?.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((transaction) => (
-                                    <TableRow key={transaction._id} sx={{ '&:last-child td, &:last-child th': { textTransform: 'capitalize', border: 0 } }}>
-                                        <TableCell component="th" scope="row">
-                                            {transaction.transactionNumber}
-                                        </TableCell>
-                                        <TableCell component="th" scope="row">
-                                            {['completed'].includes(transaction.status) || (transaction.invoiceNumber && !transaction.serialNumber) ? String(transaction.invoiceNumber).padStart(6, '0') : ''}
-                                        </TableCell>
-                                        {/* <TableCell component="th" scope="row">
-                                        {transaction.status == 'completed' || !transaction.serialNumber ? '' : String(transaction.serialNumber).padStart(6, '0')}
-                                    </TableCell> */}
-                                        <TableCell component="th" scope="row">
-                                            {['refunded', 'cancelled'].includes(transaction.status) && transaction.serialNumber ? String(transaction.invoiceNumber).padStart(6, '0') : null}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                label={upperCase(transaction.status)}
-                                                size="small"
-                                                variant="outlined"
-                                                color={
-                                                    transaction.status === 'completed'
-                                                        ? 'success'
-                                                        : transaction.status === 'hold'
-                                                            ? 'info' : 'error'
-                                                }
-                                            />
-                                        </TableCell>
-                                        {filterByUser && (
-                                            <>
-                                                <TableCell>{transaction.branch.name}</TableCell>
-                                                <TableCell>{transaction.cashier.name}</TableCell>
-                                            </>
-                                        )}
-                                        <TableCell>{transaction.customer.name}</TableCell>
-                                        <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled'].includes(transaction.status) || !transaction.serialNumber ? transaction.totalSalesWithoutMemberDiscount.toFixed(2) : null}</TableCell>
-                                        <TableCell sx={{ textWrap: 'nowrap' }}>{!['cancelled'].includes(transaction.status) || !transaction.serialNumber ? transaction.totalMemberDiscount.toFixed(2) : null}</TableCell>
-                                        <TableCell sx={{ textWrap: 'nowrap' }}>{transaction.status != 'cancelled' || !transaction.serialNumber ? transaction.totalNetSales.toFixed(2) : null}</TableCell>
+                            ))}
+                    </TableBody>
+                </Table>
+                {isLoading && (
+                    <Stack alignItems="center" py={6}>
+                        <CircularProgress size={28} />
+                    </Stack>
+                )}
+                {!isLoading && (!transactions || transactions.length === 0) && (
+                    <Stack alignItems="center" py={6}>
+                        <Typography color="text.secondary" variant="h5">
+                            No data available for this table
+                        </Typography>
+                    </Stack>
+                )}
+            </TableContainer>
+            <TablePagination
+                component="div"
+                count={transactions?.length || 0}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+            />
+        </Card>
+    );
 
-                                        <TableCell>{moment(transaction.transactionDate).format('YYYY-MM-DD hh:mmA')}</TableCell>
-                                        <TableCell sx={{ pl: 0, py: 0, width: 0 }}>
-                                            <TransactionModal transaction={transaction} />
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                        {children}
-                        {/* <Stack py={1.5} px={2.5} justifyContent='space-between' direction='row'>
-                    <Button variant='outlined'>Previous</Button>
-                    <Button variant='outlined'>Next</Button>
-                    </Stack> */}
-                    </TableContainer>
-                    <div style={{ flex: '0 1 auto' }}>
-                        <TablePagination
-                            component="div"
-                            count={transactions?.length}
-                            page={page}
-                            onPageChange={handleChangePage}
-                            rowsPerPage={rowsPerPage}
-                            onRowsPerPageChange={handleChangeRowsPerPage}
-                        />
-                    </div>
-                </Card>
-            </MainCard>
+    return (
+        <PrinterProvider>
+            <Stack spacing={2.5}>
+                {renderHeader()}
+                {renderFilters()}
+                {renderTable()}
+            </Stack>
         </PrinterProvider>
     );
-
-    const renderMessage = (children) => (
-        <Stack alignItems="center" my={4}>
-            {children}
-        </Stack>
-    );
-
-    if (isLoading) {
-        return renderTable(renderMessage(<CircularProgress size={28} />));
-    }
-
-    if (!transactions || transactions.length === 0) {
-        return renderTable(
-            renderMessage(
-                <Typography color="lightgray" variant="h5">
-                    No data available for this table
-                </Typography>
-            )
-        );
-    }
-
-    return renderTable();
 }
 
 export default TransactionsPage;
